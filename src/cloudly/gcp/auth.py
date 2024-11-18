@@ -12,21 +12,27 @@ See: https://google.aip.dev/auth/4110
 
 """
 
-from datetime import datetime, timezone
-import os
 import json
+import os
+from datetime import datetime, timezone
 
 import google.auth
-from google.api_core.retry import Retry, if_exception_type
 from google.api_core.exceptions import RetryError
-
+from google.api_core.retry import Retry, if_exception_type
 
 _PROJECT_ID = None
 _CREDENTIALS = None
 
 
-def set_env(*, project_id: str, private_key_id: str, private_key: str, client_id: str, client_email: str,
-            path: str | None = None):
+def set_env(
+    *,
+    project_id: str,
+    private_key_id: str,
+    private_key: str,
+    client_id: str,
+    client_email: str,
+    path: str | None = None,
+):
     """
     This function sets up env var(s) on a non-GCP machine so that GCP's default mechanism can find account
     credentials as if the code is running on a GCP machine.
@@ -45,16 +51,15 @@ def set_env(*, project_id: str, private_key_id: str, private_key: str, client_id
         'type': 'service_account',
         'project_id': project_id,
         'private_key_id': private_key_id,
-        'private_key':
-            '-----BEGIN PRIVATE KEY-----\\n'
-            + private_key.encode('latin1').decode('unicode_escape')
-            + '\\n-----END PRIVATE KEY-----\\n',
+        'private_key': '-----BEGIN PRIVATE KEY-----\\n'
+        + private_key.encode('latin1').decode('unicode_escape')
+        + '\\n-----END PRIVATE KEY-----\\n',
         'client_email': client_email,
         'client_id': client_id,
         'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
         'token_uri': 'https://oauth2.googleapis.com/token',
         'auth_provider_x509_cert_url': 'https://www.googleapis.com/oauth2/v1/certs',
-        'client_x509_cert_url': f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40')}"
+        'client_x509_cert_url': f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40')}",
     }
 
     if not path:
@@ -64,14 +69,13 @@ def set_env(*, project_id: str, private_key_id: str, private_key: str, client_id
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = path
 
 
-
 def get_project_id() -> str:
     global _PROJECT_ID
     global _CREDENTIALS
     if _PROJECT_ID:
         return _PROJECT_ID
     _CREDENTIALS, _PROJECT_ID = google.auth.default(
-        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+        scopes=['https://www.googleapis.com/auth/cloud-platform'],
     )
     return _PROJECT_ID
 
@@ -88,13 +92,15 @@ def get_credentials(valid_for_seconds: int = 600, *, return_state: bool = False)
     renewed = False
     if not _CREDENTIALS:
         _CREDENTIALS, _PROJECT_ID = google.auth.default(
-            scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            scopes=['https://www.googleapis.com/auth/cloud-platform'],
         )
         renewed = True
     credentials = _CREDENTIALS
     if (
         not credentials.token
-        or (credentials.expiry - datetime.now(timezone.utc).replace(tzinfo=None)).total_seconds()
+        or (
+            credentials.expiry - datetime.now(timezone.utc).replace(tzinfo=None)
+        ).total_seconds()
         < valid_for_seconds
     ):
         try:
