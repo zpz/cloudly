@@ -1,5 +1,21 @@
 .. :tocdepth: 3
 
+=======
+cloudly
+=======
+
+(Generated on |today| for cloudly version |version|.)
+
+.. automodule:: cloudly
+   :no-members:
+   :no-undoc-members:
+   :no-special-members:
+
+
+To install, do::
+
+   $ pip3 install cloudly[gcp]
+
 
 API reference
 =============
