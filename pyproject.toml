@@ -1,0 +1,74 @@
+[build-system]
+requires = ["flit_core >=3.7.1,<4"]
+build-backend = "flit_core.buildapi"
+
+
+[project]
+name = "cloudly"
+authors = [
+    {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
+]
+dependencies = []
+requires-python = ">=3.10"
+readme = "README.rst"
+license = {file = "LICENSE"}
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dynamic = ['version', 'description']
+
+
+[project.urls]
+Source = "https://github.com/zpz/cloudly"
+
+
+[project.optional-dependencies]
+doc = [
+    "sphinx",
+    "numpydoc",
+    "pydata-sphinx-theme",
+]
+gcp = [
+    "google-auth",
+    "google-api-core",
+    "google-cloud-secret-manager",
+]
+test = [
+    "pytest-asyncio",
+]
+
+
+# See https://beta.ruff.rs/docs/rules/
+[tool.ruff]
+target-version = "py310"
+exclude = ["tests/experiments"]
+
+[tool.ruff.lint]
+select = ["E", "F", "S", "I001"]  # isort
+ignore = ["E501", "S101", "S102", "S103", "S104", "S108", "S301", "S311", "S603", "S607", "S608"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["E402", "F401"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+addopts = "-sv --log-cli-level info -p no:cacheprovider --ignore tests/experiments --tb=short --durations 3"
+
+
+[tool.coverage.report]
+fail_under = 0
+show_missing = true
+skip_empty = true
+
+
+[tool.coverage.run]
+source = ["cloudly"]
+data_file = "/tmp/.coverage"
+
