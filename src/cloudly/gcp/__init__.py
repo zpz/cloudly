@@ -1,2 +1,1 @@
-from . import auth
-from . import secretmanager
+from . import auth, secretmanager
