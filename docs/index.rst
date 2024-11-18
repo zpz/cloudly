@@ -4,7 +4,14 @@
 API reference
 =============
 
+cloudly.gcp.auth
+----------------
+
 .. automodule:: cloudly.gcp.auth
+
+
+cloudly.gcp.secretmanager
+-------------------------
 
 .. automodule:: cloudly.gcp.secretmanager
 
