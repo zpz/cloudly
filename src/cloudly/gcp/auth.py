@@ -80,7 +80,9 @@ def get_project_id() -> str:
     return _PROJECT_ID
 
 
-def get_credentials(valid_for_seconds: int = 600, *, return_state: bool = False) -> str | tuple[str, bool]:
+def get_credentials(
+    valid_for_seconds: int = 600, *, return_state: bool = False
+) -> str | tuple[str, bool]:
     """
     `valid_for_seconds`: the credentials should be valid for at least this many seconds;
         if the existing credential would expire sooner than this, renew it.
