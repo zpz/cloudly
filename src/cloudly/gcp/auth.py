@@ -9,7 +9,7 @@ If the code is running on a non-GCP machine but needs to interact with GCP,
 you can call :func:`set_env` to provide env vars that are expected by the GCP mechanism.
 
 See: https://google.aip.dev/auth/4110
-
+     https://stackoverflow.com/questions/44328277/how-to-auth-to-google-cloud-using-service-account-in-python
 """
 
 import json
@@ -32,12 +32,15 @@ def set_env(
     client_id: str,
     client_email: str,
     path: str | None = None,
-):
+) -> None:
     """
     This function sets up env var(s) on a non-GCP machine so that GCP's default mechanism can find account
     credentials as if the code is running on a GCP machine.
 
     I'm not sure all the content of ``info`` is required.
+
+    This function needs to be called only once in the program.
+    Env vars set by `os.environ` carries over into other processes created using the ``multiprocessing`` module.
 
     Alternatively, if you have the dict ``info``,  the account ``credentials`` can be obtained by the following
     function call
@@ -47,13 +50,16 @@ def set_env(
         google.oauth2.service_account.Credentials.from_service_account_info(
             info, scopes=['https://www.googleapis.com/auth/cloud-platform'])
     """
+    private_key = (
+        '-----BEGIN PRIVATE KEY-----\n'
+        + private_key.encode('latin1').decode('unicode_escape')
+        + '\n-----END PRIVATE KEY-----\n'
+    )
     info = {
         'type': 'service_account',
         'project_id': project_id,
         'private_key_id': private_key_id,
-        'private_key': '-----BEGIN PRIVATE KEY-----\\n'
-        + private_key.encode('latin1').decode('unicode_escape')
-        + '\\n-----END PRIVATE KEY-----\\n',
+        'private_key': private_key,
         'client_email': client_email,
         'client_id': client_id,
         'auth_uri': 'https://accounts.google.com/o/oauth2/auth',
@@ -61,12 +67,18 @@ def set_env(
         'auth_provider_x509_cert_url': 'https://www.googleapis.com/oauth2/v1/certs',
         'client_x509_cert_url': f"https://www.googleapis.com/robot/v1/metadata/x509/{client_email.replace('@', '%40')}",
     }
-
-    if not path:
+    if path:
+        path = os.path.abspath(path)
+    else:
         path = os.path.expanduser('~') + '/._gcp_credentials'
     with open(path, 'w') as file:
         json.dump(info, file)
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = path
+
+    global _PROJECT_ID
+    global _CREDENTIALS
+    _PROJECT_ID = project_id
+    _CREDENTIALS = None
 
 
 def get_project_id() -> str:
@@ -81,8 +93,9 @@ def get_project_id() -> str:
 
 
 def get_credentials(
-    valid_for_seconds: int = 600, *, return_state: bool = False
-) -> str | tuple[str, bool]:
+    *,
+    valid_for_seconds: int = 600, return_state: bool = False
+) -> google.auth.credentials.Credentials | tuple[google.auth.credentials.Credentials, bool]:
     """
     `valid_for_seconds`: the credentials should be valid for at least this many seconds;
         if the existing credential would expire sooner than this, renew it.
@@ -123,3 +136,11 @@ def get_credentials(
     if return_state:
         return credentials, renewed
     return credentials
+    # This object has attributes "token", "expiry", and ""
+
+
+def get_service_account_email() -> str:
+    if _CREDENTIALS:
+        return _CREDENTIALS.service_account_email
+    return get_credentials().service_account_email
+
