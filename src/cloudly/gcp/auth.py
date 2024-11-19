@@ -93,9 +93,11 @@ def get_project_id() -> str:
 
 
 def get_credentials(
-    *,
-    valid_for_seconds: int = 600, return_state: bool = False
-) -> google.auth.credentials.Credentials | tuple[google.auth.credentials.Credentials, bool]:
+    *, valid_for_seconds: int = 600, return_state: bool = False
+) -> (
+    google.auth.credentials.Credentials
+    | tuple[google.auth.credentials.Credentials, bool]
+):
     """
     `valid_for_seconds`: the credentials should be valid for at least this many seconds;
         if the existing credential would expire sooner than this, renew it.
@@ -143,4 +145,3 @@ def get_service_account_email() -> str:
     if _CREDENTIALS:
         return _CREDENTIALS.service_account_email
     return get_credentials().service_account_email
-
