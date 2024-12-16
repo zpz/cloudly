@@ -8,7 +8,9 @@ name = "cloudly"
 authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
-dependencies = []
+dependencies = [
+    "tzdata",
+]
 requires-python = ">=3.10"
 readme = "README.rst"
 license = {file = "LICENSE"}
@@ -63,7 +65,7 @@ addopts = "-sv --log-cli-level info -p no:cacheprovider --ignore tests/experimen
 
 
 [tool.coverage.report]
-fail_under = 0
+fail_under = 10
 show_missing = true
 skip_empty = true
 

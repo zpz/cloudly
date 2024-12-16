@@ -17,6 +17,7 @@ import os
 from datetime import datetime, timezone
 
 import google.auth
+import google.auth.credentials
 from google.api_core.exceptions import RetryError
 from google.api_core.retry import Retry, if_exception_type
 
