@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - New module `cloudly.util.ratelimit`.
 - New module `cloudly.util.logging`.
 - New module `cloudly.util.datetime`.
+- New module `cloudly.util.docker`.
 
 
 ## [0.0.3] - 2024-11-18
