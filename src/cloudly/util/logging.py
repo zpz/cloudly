@@ -59,8 +59,6 @@ rootlogger = logging.getLogger()
 logger = logging.getLogger(__name__)
 
 
-
-
 class DynamicFormatter(Formatter):
     def __init__(self, *args, **kwargs):
         # TODO: could add parameters to customize formatting, as new ideas emerges.
@@ -191,8 +189,6 @@ def log_uncaught_exception(handlers=None, logger=logger):
         sys.__excepthook__(exc_type, exc_val, exc_tb)
 
     sys.excepthook = handle_exception
-
-
 
 
 def get_calling_file() -> inspect.FrameInfo:
