@@ -7,6 +7,6 @@ __version__ = '0.0.4'
 from . import util
 
 try:
-    from .import gcp
+    from . import gcp
 except ImportError:
     pass
