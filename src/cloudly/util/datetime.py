@@ -14,25 +14,25 @@ def tznow(tzname) -> datetime:
         tzname: the ISO standard timezone name,
         such as ``Africa/Cairo``, ``America/Los_Angeles``.
     """
-    if tzname == "utc":
-        tzname = "UTC"
+    if tzname == 'utc':
+        tzname = 'UTC'
     return datetime.now(ZoneInfo(tzname))
 
 
 def easternnow() -> datetime:
-    return tznow("America/New_York")
+    return tznow('America/New_York')
 
 
 def centralnow() -> datetime:
-    return tznow("America/Chicago")
+    return tznow('America/Chicago')
 
 
 def mountainnow() -> datetime:
-    return tznow("America/Denver")
+    return tznow('America/Denver')
 
 
 def pacificnow() -> datetime:
-    return tznow("America/Los_Angeles")
+    return tznow('America/Los_Angeles')
 
 
 def isoformatnow() -> str:
@@ -55,4 +55,4 @@ def isoformatnow() -> str:
     Another way to make a fixed-length datetime str is to use
     `datetime.strftime('%Y%m%d%H%M%S.%f')`.
     """
-    return utcnow().isoformat(timespec="microseconds")
+    return utcnow().isoformat(timespec='microseconds')

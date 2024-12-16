@@ -22,16 +22,16 @@ def test_datetime():
     print()
     print(utcnow())
     print(pacificnow())
-    assert_same_time(utcnow(), tznow("utc"))
-    assert_same_time(easternnow(), tznow("America/New_York"))
-    assert_same_time(centralnow(), tznow("America/Chicago"))
-    assert_same_time(mountainnow(), tznow("America/Denver"))
-    assert_same_time(pacificnow(), tznow("America/Los_Angeles"))
+    assert_same_time(utcnow(), tznow('utc'))
+    assert_same_time(easternnow(), tznow('America/New_York'))
+    assert_same_time(centralnow(), tznow('America/Chicago'))
+    assert_same_time(mountainnow(), tznow('America/Denver'))
+    assert_same_time(pacificnow(), tznow('America/Los_Angeles'))
 
 
 def test_isoformatnow():
     t1 = isoformatnow()
-    t2 = utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")
+    t2 = utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
     print()
     print(t1)
     print(t2)

@@ -18,14 +18,13 @@ destination of the log message, etc.
 import inspect
 import logging
 import logging.handlers
-from logging import Formatter
 import os
 import sys
+import time
 import warnings
 from datetime import datetime
+from logging import Formatter
 from typing import Union
-import time
-
 
 # When exceptions are raised during logging, then,
 # the default implementation of handleError() in Handler
@@ -44,13 +43,13 @@ import time
 
 
 # Turn off annoyance in ptpython when setting DEBUG logging
-logging.getLogger("parso").setLevel(logging.ERROR)
+logging.getLogger('parso').setLevel(logging.ERROR)
 
 logging.captureWarnings(True)
-warnings.filterwarnings("default", category=ResourceWarning)
-warnings.filterwarnings("default", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="ptpython")
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="jedi")
+warnings.filterwarnings('default', category=ResourceWarning)
+warnings.filterwarnings('default', category=DeprecationWarning)
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='ptpython')
+warnings.filterwarnings('ignore', category=DeprecationWarning, module='jedi')
 
 
 rootlogger = logging.getLogger()
@@ -83,14 +82,14 @@ def get_calling_file() -> inspect.FrameInfo:
     st = inspect.stack()
     caller = None
     for s in st:
-        if os.path.basename(s.filename) == "runpy.py":
+        if os.path.basename(s.filename) == 'runpy.py':
             # `runpy.py` is usually what finds and launches the module specified by the
             # `-m` command line switch. So, the last step was the user script. Stop here.
             break
-        if "_pytest/python.py" in s.filename:
+        if '_pytest/python.py' in s.filename:
             # Don't follow into py.test; stop at the test file
             break
-        if s.filename == "<stdin>":
+        if s.filename == '<stdin>':
             # This is the Python interpreter.
             caller = s
             break
@@ -107,7 +106,7 @@ class DynamicFormatter(Formatter):
     def format(self, record):
         r = record
         asctime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(r.created))
-        fmt = f"[{asctime}.{int((r.created % 1) * 10000)} {self._tz}, {r.levelname}]  %(message)s  [({r.filename}, {r.lineno}, {r.funcName}"
+        fmt = f'[{asctime}.{int((r.created % 1) * 10000)} {self._tz}, {r.levelname}]  %(message)s  [({r.filename}, {r.lineno}, {r.funcName}'
 
         p = r.processName
         t = r.threadName
@@ -119,30 +118,29 @@ class DynamicFormatter(Formatter):
                 if tk is None:
                     fmt += ')]'
                 else:
-                    fmt += f" | {tk})]"
+                    fmt += f' | {tk})]'
             else:
                 if tk is None:
-                    fmt += f" | {t})]"
+                    fmt += f' | {t})]'
                 else:
-                    fmt += f" | {t}, {tk})]"
+                    fmt += f' | {t}, {tk})]'
         else:
             if t == 'MainThread':
                 if tk is None:
                     fmt += f' | {p} <{r.process}>)]'
                 else:
-                    fmt += f" | {p} <{r.process}>, {tk})]"
+                    fmt += f' | {p} <{r.process}>, {tk})]'
             else:
                 if tk is None:
-                    fmt += f" | {p} <{r.process}>, {t})]"
+                    fmt += f' | {p} <{r.process}>, {t})]'
                 else:
-                    fmt += f" | {p} <{r.process}>, {t}, {tk})]"
+                    fmt += f' | {p} <{r.process}>, {t}, {tk})]'
 
         formatter = Formatter(fmt)
         return formatter.format(record)
         # We cannot completely construct the message and return it w/o making use
         # of a Formatter's `format` method. Somehow that wouldn't have the correct behavior
         # for `logger.exception`---it would not print the traceback.
-    
 
 
 def set_level(level: Union[str, int] = logging.INFO) -> int:
@@ -170,17 +168,21 @@ def add_console_handler():
 
 
 def add_disk_handler(
-    *, foldername: str = None, maxBytes=1_000_000, backupCount=20, delay=True,
+    *,
+    foldername: str = None,
+    maxBytes=1_000_000,
+    backupCount=20,
+    delay=True,
 ):
     if foldername:
-        foldername = foldername.rstrip("/")
+        foldername = foldername.rstrip('/')
     else:
         launcher = get_calling_file()
         foldername == f"{os.environ.get('LOGDIR', '/tmp/log')}/{launcher.lstrip('/').replace('/', '-')}"
     print(f"Log files are located in '{foldername}'")
     os.makedirs(foldername, exist_ok=True)
     h = logging.handlers.RotatingFileHandler(
-        filename=foldername + "/current",
+        filename=foldername + '/current',
         maxBytes=maxBytes,
         backupCount=backupCount,
         delay=delay,
