@@ -1,3 +1,5 @@
+__all__ = ['get_secret']
+
 from google.cloud import secretmanager
 
 from .auth import get_project_id

@@ -15,6 +15,9 @@ and then just use ``logger`` to write logs without concern about formatting,
 destination of the log message, etc.
 """
 
+__all__ = ['config_logger', 'set_level', 'add_console_handler']
+
+
 import inspect
 import logging
 import logging.handlers
@@ -56,45 +59,6 @@ rootlogger = logging.getLogger()
 logger = logging.getLogger(__name__)
 
 
-def get_calling_file() -> inspect.FrameInfo:
-    """
-    This function finds the "launch script" of the currently running program.
-    The "launch script" is either a `.py` file or the Python interpreter.
-
-    The returned object has attribute `filename`, which is the full path of the launch script.
-    The value `'<stdin>'` suggests the Python interpreter, i.e. it's in an interactive Python session.
-
-        $ ptpython
-        >>> from cloudly.util.logging import get_calling_file
-        >>> def func_a():
-        ...     return get_calling_file()
-        >>> def func_b():
-        ...     z = func_a()
-        ...     print(z)
-        ...     print()
-        ...     print(z.filename)
-        >>> func_b()
-        FrameInfo(frame=<frame at 0x7f54d8009e30, file '<stdin>', line 2, code func_a>, filename='<stdin>', lineno=2, function='func_a', code_context=None, index=None)
-
-        <stdin>
-        >>>
-    """
-    st = inspect.stack()
-    caller = None
-    for s in st:
-        if os.path.basename(s.filename) == 'runpy.py':
-            # `runpy.py` is usually what finds and launches the module specified by the
-            # `-m` command line switch. So, the last step was the user script. Stop here.
-            break
-        if '_pytest/python.py' in s.filename:
-            # Don't follow into py.test; stop at the test file
-            break
-        if s.filename == '<stdin>':
-            # This is the Python interpreter.
-            caller = s
-            break
-        caller = s
-    return caller
 
 
 class DynamicFormatter(Formatter):
@@ -167,6 +131,12 @@ def add_console_handler():
     rootlogger.addHandler(h)
 
 
+def config_logger(level=logging.INFO):
+    # For use in one-off scripts.
+    set_level(level)
+    add_console_handler()
+
+
 def add_disk_handler(
     *,
     foldername: str = None,
@@ -223,7 +193,44 @@ def log_uncaught_exception(handlers=None, logger=logger):
     sys.excepthook = handle_exception
 
 
-def config_logger(level=logging.INFO, **kwargs):
-    # For use in one-off scripts.
-    set_level(level)
-    add_console_handler(**kwargs)
+
+
+def get_calling_file() -> inspect.FrameInfo:
+    """
+    This function finds the "launch script" of the currently running program.
+    The "launch script" is either a `.py` file or the Python interpreter.
+
+    The returned object has attribute `filename`, which is the full path of the launch script.
+    The value `'<stdin>'` suggests the Python interpreter, i.e. it's in an interactive Python session.
+
+        $ ptpython
+        >>> from cloudly.util.logging import get_calling_file
+        >>> def func_a():
+        ...     return get_calling_file()
+        >>> def func_b():
+        ...     z = func_a()
+        ...     print(z)
+        ...     print()
+        ...     print(z.filename)
+        >>> func_b()
+        FrameInfo(frame=<frame at 0x7f54d8009e30, file '<stdin>', line 2, code func_a>, filename='<stdin>', lineno=2, function='func_a', code_context=None, index=None)
+
+        <stdin>
+        >>>
+    """
+    st = inspect.stack()
+    caller = None
+    for s in st:
+        if os.path.basename(s.filename) == 'runpy.py':
+            # `runpy.py` is usually what finds and launches the module specified by the
+            # `-m` command line switch. So, the last step was the user script. Stop here.
+            break
+        if '_pytest/python.py' in s.filename:
+            # Don't follow into py.test; stop at the test file
+            break
+        if s.filename == '<stdin>':
+            # This is the Python interpreter.
+            caller = s
+            break
+        caller = s
+    return caller
