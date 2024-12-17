@@ -67,8 +67,10 @@ class DynamicFormatter(Formatter):
 
     def format(self, record):
         r = record
-        asctime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(r.created))
-        fmt = f'[{asctime}.{int((r.created % 1) * 10000)} {self._tz}, {r.levelname}]  %(message)s  [({r.filename}, {r.lineno}, {r.funcName}'
+        # asctime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(r.created))
+        # msecs = int((r.created % 1) * 10000)
+        # fmt = f'[{asctime}.{msecs} {self._tz}, {r.levelname}]  %(message)s  [({r.filename}, {r.lineno}, {r.funcName}'
+        fmt = f'%(asctime)s {self._tz} {r.levelname: <12}  %(message)s     [( {r.filename}, {r.lineno}, {r.funcName}'
 
         p = r.processName
         t = r.threadName
@@ -78,25 +80,25 @@ class DynamicFormatter(Formatter):
         if p == 'MainProcess':
             if t == 'MainThread':
                 if tk is None:
-                    fmt += ')]'
+                    fmt += ' )]'
                 else:
-                    fmt += f' | {tk})]'
+                    fmt += f' | {tk} )]'
             else:
                 if tk is None:
-                    fmt += f' | {t})]'
+                    fmt += f' | {t} )]'
                 else:
-                    fmt += f' | {t}, {tk})]'
+                    fmt += f' | {t}, {tk} )]'
         else:
             if t == 'MainThread':
                 if tk is None:
-                    fmt += f' | {p} <{r.process}>)]'
+                    fmt += f' | {p} <{r.process}> )]'
                 else:
-                    fmt += f' | {p} <{r.process}>, {tk})]'
+                    fmt += f' | {p} <{r.process}>, {tk} )]'
             else:
                 if tk is None:
-                    fmt += f' | {p} <{r.process}>, {t})]'
+                    fmt += f' | {p} <{r.process}>, {t} )]'
                 else:
-                    fmt += f' | {p} <{r.process}>, {t}, {tk})]'
+                    fmt += f' | {p} <{r.process}>, {t}, {tk} )]'
 
         formatter = Formatter(fmt)
         return formatter.format(record)
