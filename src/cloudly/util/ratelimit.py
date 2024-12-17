@@ -133,7 +133,7 @@ class RateLimiter:
         The current time is internally recorded as an action (to be taken by the user
         as expected).
 
-        If the system is currently out of quote (i.e. has reached the limit),
+        If the system is currently out of quota (i.e. has reached the limit),
         `False` is returned, and user should not proceed.
 
         Example,

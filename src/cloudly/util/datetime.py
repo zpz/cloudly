@@ -1,12 +1,8 @@
 __all__ = ['utcnow', 'easternnow', 'centralnow', 'pacificnow', 'tznow', 'isoformatnow']
 
 
-from datetime import UTC, datetime
+from datetime import datetime
 from zoneinfo import ZoneInfo
-
-
-def utcnow() -> datetime:
-    return datetime.now(UTC)
 
 
 def tznow(tzname) -> datetime:
@@ -20,6 +16,10 @@ def tznow(tzname) -> datetime:
     if tzname == 'utc':
         tzname = 'UTC'
     return datetime.now(ZoneInfo(tzname))
+
+
+def utcnow() -> datetime:
+    return tznow('UTC')
 
 
 def easternnow() -> datetime:

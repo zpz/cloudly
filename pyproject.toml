@@ -39,6 +39,7 @@ gcp = [
 ]
 test = [
     "pytest-asyncio",
+    "boltons",
 ]
 
 
