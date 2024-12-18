@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.0.6] - in progress
+
+- New module `cloudly.gcp.storage` (a simple reference to `upathlib`).
+
+
 ## [0.0.5] - 2024-12-16
 
 - Bug fix related to `datetime.UTC`. This is available in Python 3.11+ while this package requires Python 3.10+. Downgraded the development environment from 3.12 to 3.10 and fixed the bug.

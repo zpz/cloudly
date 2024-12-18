@@ -4,9 +4,3 @@ Utilities for cloud computing.
 
 __version__ = '0.0.5'
 
-from . import util
-
-try:
-    from . import gcp
-except ImportError:
-    pass

@@ -23,7 +23,6 @@ import logging
 import logging.handlers
 import os
 import sys
-import time
 import warnings
 from datetime import datetime
 from logging import Formatter

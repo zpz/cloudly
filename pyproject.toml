@@ -36,6 +36,8 @@ gcp = [
     "google-auth",
     "google-api-core",
     "google-cloud-secret-manager",
+    "google-cloud-logging",
+    "upathlib[gcs]",
 ]
 test = [
     "pytest-asyncio",
