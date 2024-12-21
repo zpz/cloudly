@@ -5,9 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
-## [0.1.0] - in progress
+## [0.1.0] - 2024-12-20
 
-- Merged package `upathlib` into `cloudly`. For change log of the `upathlib` code up to this point, see the [original `upathlib` repo](https://github.com/zpz/upathlib)/
+- Merged package `upathlib` into `cloudly`. For change log of the `upathlib` code up to this point, see the original [`upathlib` repo](https://github.com/zpz/upathlib).
+- New module `cloudly.gcp.logging`.
 
 
 ## [0.0.5] - 2024-12-16
