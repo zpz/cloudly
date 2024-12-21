@@ -10,6 +10,7 @@ authors = [
 ]
 dependencies = [
     "filelock >= 3.9.1",
+    "pyarrow >= 12.0.1",
     "tqdm",
     "typing-extensions",
     "tzdata",

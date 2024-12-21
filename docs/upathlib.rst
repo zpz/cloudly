@@ -210,12 +210,6 @@ GcsBlobUpath
 .. autoclass:: cloudly.gcp.storage.GcsBlobUpath
 
 
-Serializers
-===========
-
-.. automodule:: cloudly.upathlib.serializer
-
-
 
 Using upathlib to implement a "multiplexer"
 ===========================================

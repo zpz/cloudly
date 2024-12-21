@@ -9,6 +9,8 @@ from cloudly.util.logging import DynamicFormatter, rootlogger, set_level
 
 from .auth import get_credentials, get_project_id
 
+logging.getLogger('urllib3.connectionpool').setLevel(logging.WARNING)
+
 
 def gcp_handler(
     name: str,
@@ -50,7 +52,7 @@ def gcp_handler(
     return handler
 
 
-def add_gcp_handler(name, *, labels=None, **kwargs):
+def add_gcp_handler(name, *, labels=None, **kwargs) -> logging.Handler:
     h = gcp_handler(name=name, labels=labels, **kwargs)
     h.setFormatter(DynamicFormatter())
     rootlogger.addHandler(h)

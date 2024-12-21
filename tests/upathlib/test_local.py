@@ -5,7 +5,8 @@ from uuid import uuid4
 import pytest
 
 import cloudly.upathlib._tests as alltests
-from cloudly.upathlib import LocalUpath, serializer
+from cloudly.upathlib import LocalUpath
+from cloudly.util import serializer
 
 
 @pytest.fixture

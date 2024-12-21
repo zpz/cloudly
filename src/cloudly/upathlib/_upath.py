@@ -37,7 +37,7 @@ from tqdm.auto import tqdm
 from typing_extensions import Self
 
 from ._util import MAX_THREADS, get_shared_thread_pool
-from .serializer import (
+from cloudly.util.serializer import (
     JsonSerializer,
     PickleSerializer,
     ZstdPickleSerializer,
