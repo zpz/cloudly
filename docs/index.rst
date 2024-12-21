@@ -1,4 +1,4 @@
-:tocdepth: 3
+.. :tocdepth: 3
 
 =======
 cloudly
@@ -25,10 +25,10 @@ for with optional dependencies, such as
 .. toctree::
    :maxdepth: 1
 
-   azure
    gcp
-   util
+   biglist
    upathlib
+   util
 
 
 Indices and tables

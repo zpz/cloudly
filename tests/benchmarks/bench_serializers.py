@@ -3,7 +3,7 @@ from time import perf_counter
 import numpy
 from faker import Faker
 
-from cloudly.upathlib.serializer import (
+from cloudly.util.serializer import (
     CompressedOrjsonSerializer,
     CompressedPickleSerializer,
     JsonByteSerializer,

@@ -1,6 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor
 
-from cloudly.upathlib.serializer import (
+from cloudly.util.serializer import (
     JsonSerializer,
     Lz4OrjsonSerializer,
     Lz4PickleSerializer,

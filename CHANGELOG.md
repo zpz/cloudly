@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.2.0] - 2024-12-21
+
+- Merged package `biglist` into `cloudly`. For change log of the `biglist` code up to this point, see the original [`biglist` repo](https://github.com/zpz/biglist).
+
 
 ## [0.1.0] - 2024-12-20
 

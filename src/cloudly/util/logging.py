@@ -127,13 +127,14 @@ def set_level(level: Union[str, int] = logging.INFO) -> int:
     return level0
 
 
-def add_console_handler():
+def add_console_handler() -> logging.Handler:
     """
     Log to ``sys.stderr``.
     """
     h = logging.StreamHandler()
     h.setFormatter(DynamicFormatter())
     rootlogger.addHandler(h)
+    return h
 
 
 def config_logger(level=logging.INFO):
