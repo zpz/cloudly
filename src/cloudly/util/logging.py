@@ -113,6 +113,12 @@ def set_level(level: Union[str, int] = logging.INFO) -> int:
 
     Return the original level that was in effect before this function was called.
     By default, the original level is `logging.INFO` or `logging.WARNING`.
+
+    Parameters
+    ----------
+    level
+        Either the integers `logging.DEBUG`, `logging.INFO`, etc., or strings
+        "debug", "info", etc.
     """
     if isinstance(level, str):
         level = getattr(logging, level.upper())
