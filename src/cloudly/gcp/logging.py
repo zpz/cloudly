@@ -5,25 +5,26 @@ from google.cloud.logging import Client
 from google.cloud.logging.handlers import CloudLoggingHandler
 from google.cloud.logging_v2.handlers.transports import BackgroundThreadTransport
 
-
-from .auth import get_credentials, get_project_id
 from cloudly.util.logging import DynamicFormatter, rootlogger, set_level
 
+from .auth import get_credentials, get_project_id
 
 
-def gcp_handler(name: str, *,
-                labels: dict = None,
-                grace_period: float = None,
-                batch_size: int = None,
-                max_latency: float = None,
-                stream: IO = None,
-                ) -> logging.Handler:
-    '''
+def gcp_handler(
+    name: str,
+    *,
+    labels: dict = None,
+    grace_period: float = None,
+    batch_size: int = None,
+    max_latency: float = None,
+    stream: IO = None,
+) -> logging.Handler:
+    """
     `name` is the "log name" shown on GCP logging dashboard.
     A unique name enables user to inspect the particular program's log in isolation.
 
     User may want to pass in `labels` with info of interest to their application.
-    '''
+    """
     if grace_period is None:
         grace_period = 5.0  # seconds; same as GCP default
     if batch_size is None:
@@ -33,10 +34,18 @@ def gcp_handler(name: str, *,
 
     class BackgroundTransport(BackgroundThreadTransport):
         def __init__(self, *args, **kwargs):
-            super().__init__(*args, grace_period=grace_period, batch_size=batch_size, max_latency=max_latency, **kwargs)
+            super().__init__(
+                *args,
+                grace_period=grace_period,
+                batch_size=batch_size,
+                max_latency=max_latency,
+                **kwargs,
+            )
 
     client = Client(credentials=get_credentials(), project=get_project_id())
-    handler = CloudLoggingHandler(client, name=name, transport=BackgroundTransport, labels=labels, stream=stream)
+    handler = CloudLoggingHandler(
+        client, name=name, transport=BackgroundTransport, labels=labels, stream=stream
+    )
 
     return handler
 
