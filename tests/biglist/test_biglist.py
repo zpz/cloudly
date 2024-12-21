@@ -27,7 +27,11 @@ from cloudly.biglist import (
     Slicer,
 )
 from cloudly.upathlib import LocalUpath
-from cloudly.util.parquet import read_parquet_file, write_arrays_to_parquet, ParquetSerializer
+from cloudly.util.parquet import (
+    ParquetSerializer,
+    read_parquet_file,
+    write_arrays_to_parquet,
+)
 
 
 def test_custom_file_name():
