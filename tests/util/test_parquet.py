@@ -2,8 +2,8 @@ import io
 from types import SimpleNamespace
 
 import pyarrow
-from cloudly.upathlib import LocalUpath
 
+from cloudly.upathlib import LocalUpath
 from cloudly.util.parquet import (
     ParquetBatchData,
     ParquetFileReader,

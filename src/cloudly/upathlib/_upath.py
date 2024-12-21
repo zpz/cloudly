@@ -36,12 +36,13 @@ from typing import (
 from tqdm.auto import tqdm
 from typing_extensions import Self
 
-from ._util import MAX_THREADS, get_shared_thread_pool
 from cloudly.util.serializer import (
     JsonSerializer,
     PickleSerializer,
     ZstdPickleSerializer,
 )
+
+from ._util import MAX_THREADS, get_shared_thread_pool
 
 # End user may want to do this:
 #  logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)

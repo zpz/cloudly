@@ -3,36 +3,21 @@ from __future__ import annotations
 import atexit
 import bisect
 import concurrent.futures
-import copy
-import functools
-import io
-import itertools
 import logging
 import os
 import queue
-import string
 import tempfile
 import threading
 import uuid
-import warnings
 import weakref
 from abc import abstractmethod
-from collections.abc import Iterable, Iterator, Sequence
-from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timezone
-from typing import Any, Callable, TypeVar
-from uuid import uuid4
-
-from typing_extensions import Self
+from collections.abc import Iterator
+from typing import TypeVar
 
 from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path
-from cloudly.util import serializer
-from cloudly.util.parquet import ParquetFileReader, make_parquet_schema, ParquetSerializer
 from cloudly.util._util import Element, FileReader, Seq
 
 logger = logging.getLogger(__name__)
-
-
 
 
 _biglist_objs = weakref.WeakSet()
@@ -95,7 +80,6 @@ if hasattr(os, 'register_at_fork'):  # this is not available on Windows
         _global_thread_pool_lock_ = threading.Lock()
 
     os.register_at_fork(after_in_child=_clear_global_state)
-
 
 
 FileReaderType = TypeVar('FileReaderType', bound=FileReader)
@@ -184,7 +168,6 @@ class FileSeq(Seq[FileReaderType]):
         Note that this location does not need to be related to the location of the data files.
         """
         raise NotImplementedError
-
 
 
 class BiglistBase(Seq[Element]):

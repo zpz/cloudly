@@ -8,8 +8,6 @@ from typing import Protocol, TypeVar
 
 import zstandard
 
-
-
 # zstandard has good compression ratio and also quite fast.
 # It is very "balanced".
 # lz4 has lower compression ratio than zstandard but is much faster.
@@ -232,4 +230,3 @@ else:
             def deserialize(cls, y, **kwargs):
                 y = lz4.frame.decompress(y)
                 return super().deserialize(y, **kwargs)
-

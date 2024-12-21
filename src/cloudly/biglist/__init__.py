@@ -38,13 +38,14 @@ but also for any :class:`Seq`.
 
 from __future__ import annotations
 
+from cloudly.util._util import (
+    Chain,
+    Slicer,
+)
+
 from ._biglist import (
     Biglist,
     BiglistFileReader,
     ParquetBiglist,
     ParquetFileReader,
-)
-from cloudly.util._util import (
-    Chain,
-    Slicer,
 )

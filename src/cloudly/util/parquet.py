@@ -12,16 +12,17 @@ __all__ = [
     'ParquetSerializer',
 ]
 
+import io
 import itertools
 import logging
-import io
 from collections.abc import Iterable, Iterator, Sequence
 from multiprocessing.util import Finalize
 
 import pyarrow
-from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
+
+from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path
 
 try:
     from cloudly.gcp.auth import get_credentials
@@ -30,7 +31,6 @@ except ImportError:
 
 from ._util import FileReader, Seq, locate_idx_in_chunked_seq
 from .serializer import Serializer
-
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via
@@ -753,8 +753,6 @@ def write_pylist_to_parquet(
     return write_parquet_table(table, path, **kwargs)
 
 
-
-
 class ParquetSerializer(Serializer):
     @classmethod
     def serialize(
@@ -819,4 +817,3 @@ class ParquetSerializer(Serializer):
             y = io.BytesIO(y)
         table = pyarrow.parquet.ParquetFile(y, **kwargs).read()
         return table.to_pylist()
-
