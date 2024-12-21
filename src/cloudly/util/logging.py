@@ -69,7 +69,7 @@ class DynamicFormatter(Formatter):
         # asctime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(r.created))
         # msecs = int((r.created % 1) * 10000)
         # fmt = f'[{asctime}.{msecs} {self._tz}, {r.levelname}]  %(message)s  [({r.filename}, {r.lineno}, {r.funcName}'
-        fmt = f'%(asctime)s {self._tz} {r.levelname: <12}  %(message)s     [( {r.filename}, {r.lineno}, {r.funcName}'
+        fmt = f'%(asctime)s {self._tz} {r.levelname: <12}  %(message)s     [( {r.name}, {r.lineno}, {r.funcName}'
 
         p = r.processName
         t = r.threadName

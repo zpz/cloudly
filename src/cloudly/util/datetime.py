@@ -1,4 +1,4 @@
-__all__ = ['utcnow', 'easternnow', 'centralnow', 'pacificnow', 'tznow', 'isoformatnow']
+__all__ = ['utcnow', 'easternnow', 'centralnow', 'pacificnow', 'tznow', 'isonow']
 
 
 from datetime import datetime
@@ -38,7 +38,7 @@ def pacificnow() -> datetime:
     return tznow('America/Los_Angeles')
 
 
-def isoformatnow() -> str:
+def isonow() -> str:
     """
     This function creates a timestamp string with fixed format like
 

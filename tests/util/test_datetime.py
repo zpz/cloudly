@@ -5,7 +5,7 @@ from boltons import timeutils
 from cloudly.util.datetime import (
     centralnow,
     easternnow,
-    isoformatnow,
+    isonow,
     mountainnow,
     pacificnow,
     utcnow,
@@ -32,8 +32,8 @@ def test_datetime():
     assert_same_time(pacificnow(), datetime.now(timeutils.Pacific))
 
 
-def test_isoformatnow():
-    t1 = isoformatnow()
+def test_isonow():
+    t1 = isonow()
     t2 = utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
     print()
     print(t1)
