@@ -2,6 +2,7 @@ from time import perf_counter
 
 import numpy
 from faker import Faker
+
 from cloudly.upathlib.serializer import (
     CompressedOrjsonSerializer,
     CompressedPickleSerializer,
@@ -68,7 +69,7 @@ def main():
 
 main()
 
-'''
+"""
 Benchmark results:
     2022/4/15
     CPU 3.10GHz x 2, memory 15.5GiB
@@ -86,4 +87,4 @@ PickleSerializer             0.55 seconds,  8800228 bytes,   0.10 seconds
 OrjsonSerializer             5.80 seconds, 19860988 bytes,  12.97 seconds
 CompressedPickleSerializer  40.32 seconds,  7880118 bytes,   5.40 seconds
 CompressedOrjsonSerializer  92.53 seconds,  9282023 bytes,  21.42 seconds
-'''
+"""

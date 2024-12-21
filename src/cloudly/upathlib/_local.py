@@ -188,11 +188,11 @@ class LocalUpath(Upath, os.PathLike):
 
         # The source side may have implemented efficient downloading.
         if not quiet:
-            print(f"Copying from {source!r} into {self!r}", file=sys.stderr)
+            print(f'Copying from {source!r} into {self!r}', file=sys.stderr)
         return source._dir_to_dir(
             source=source,
             target=self,
-            method="copy_file",
+            method='copy_file',
             method_on_source=False,
             quiet=quiet,
             overwrite=overwrite,
@@ -248,11 +248,11 @@ class LocalUpath(Upath, os.PathLike):
             return self
 
         if not quiet:
-            print(f"Renaming {self!r} to {target!r}", file=sys.stderr)
+            print(f'Renaming {self!r} to {target!r}', file=sys.stderr)
         self._dir_to_dir(
             source=self,
             target=target,
-            method="rename_file",
+            method='rename_file',
             method_on_source=True,
             overwrite=overwrite,
             quiet=quiet,
@@ -336,7 +336,7 @@ class LocalUpath(Upath, os.PathLike):
         if timeout is None:
             timeout = 60
         os.makedirs(self.parent, exist_ok=True)
-        lockfile = self.with_suffix(self.suffix + ".lock")
+        lockfile = self.with_suffix(self.suffix + '.lock')
         lock = filelock.FileLock(str(lockfile))  # this object manages re-entry itself
         t0 = time.perf_counter()
         try:

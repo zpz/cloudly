@@ -1,10 +1,8 @@
 import os
-import string
 import threading
 import warnings
 import weakref
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 
 MAX_THREADS = min(32, (os.cpu_count() or 1) + 4)
 """
@@ -21,14 +19,14 @@ _global_thread_pools_lock: threading.Lock = threading.Lock()
 
 
 def get_shared_thread_pool(
-    name: str = "default", max_workers: int | None = None
+    name: str = 'default', max_workers: int | None = None
 ) -> ThreadPoolExecutor:
     with _global_thread_pools_lock:
         executor = _global_thread_pools_.get(name)
         # If the named pool exists, it is returned; the input `max_workers` is ignored.
         if executor is None or executor._shutdown:
             # `executor._shutdown` is True if user inadvertently called `shutdown` on the executor.
-            if name == "default":
+            if name == 'default':
                 if max_workers is not None:
                     warnings.warn(
                         f"size of the 'default' thread pool is determined internally; the input {max_workers} is ignored"
@@ -42,7 +40,7 @@ def get_shared_thread_pool(
     return executor
 
 
-if hasattr(os, "register_at_fork"):  # not available on Windows
+if hasattr(os, 'register_at_fork'):  # not available on Windows
 
     def _clear_global_state():
         for box in (_global_thread_pools_,):

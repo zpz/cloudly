@@ -31,31 +31,31 @@ class Blob:
         if not self.exists(client):
             raise NotFound(self.name)
         meta = self._bucket._blobs[self.name]
-        self._updated = meta["time_updated"]
-        self._generation = meta["generation"]
-        self._time_created = meta["time_created"]
-        self._size = meta["size"]
+        self._updated = meta['time_updated']
+        self._generation = meta['generation']
+        self._time_created = meta['time_created']
+        self._size = meta['size']
 
     def _get_content_type(self, content_type, filename):
-        return "ok"
+        return 'ok'
 
     def upload_from_file(self, data, *, if_generation_match=None, **ignore):
         if if_generation_match == 0 and self.name in self._bucket._blobs:
             raise FileExistsError(self.name)
         data = data.read()
-        gen = self._bucket._blobs.get(self.name, {"generation": 0})["generation"]
+        gen = self._bucket._blobs.get(self.name, {'generation': 0})['generation']
         self._bucket._blobs[self.name] = {
-            "data": data,
-            "time_created": datetime.now(),
-            "time_updated": datetime.now(),
-            "size": len(data),
-            "generation": gen + 1,
+            'data': data,
+            'time_created': datetime.now(),
+            'time_updated': datetime.now(),
+            'size': len(data),
+            'generation': gen + 1,
         }
 
     def download_to_file(self, file_obj, client=None, raw_download=None):
         try:
             z = self._bucket._blobs[self.name]
-            file_obj.write(z["data"])
+            file_obj.write(z['data'])
         except KeyError:
             raise NotFound(self.name)
 
@@ -172,15 +172,17 @@ class Client:
 @pytest.fixture()
 def gcp(mocker):
     print()
-    mocker.patch("cloudly.gcp.storage.storage.Client", Client)
-    mocker.patch("cloudly.gcp.storage.get_project_id", lambda: "abc")
-    mocker.patch("cloudly.gcp.storage.get_credentials", lambda return_state: (None, False))
-    mocker.patch("cloudly.gcp.storage.GcsBlobUpath._CLIENT", Client())
+    mocker.patch('cloudly.gcp.storage.storage.Client', Client)
+    mocker.patch('cloudly.gcp.storage.get_project_id', lambda: 'abc')
+    mocker.patch(
+        'cloudly.gcp.storage.get_credentials', lambda return_state: (None, False)
+    )
+    mocker.patch('cloudly.gcp.storage.GcsBlobUpath._CLIENT', Client())
     c = GcsBlobUpath(
-        "/tmp/test",
-        bucket_name="test",
+        '/tmp/test',
+        bucket_name='test',
     ) / str(uuid4())
-    print("c._bucket", c._bucket())
+    print('c._bucket', c._bucket())
     c.rmrf()
     try:
         yield c

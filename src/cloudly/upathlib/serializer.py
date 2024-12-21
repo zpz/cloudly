@@ -17,7 +17,7 @@ import zstandard
 #   https://stackoverflow.com/questions/67537111/how-do-i-decide-between-lz4-and-snappy-compression
 #   https://gist.github.com/oldcai/7230548
 
-T = TypeVar("T")
+T = TypeVar('T')
 
 
 MEGABYTE = 1048576  # 1024 * 1024
@@ -66,14 +66,14 @@ class JsonSerializer(Serializer):
     @classmethod
     def serialize(cls, x, *, encoding=None, errors=None, **kwargs) -> bytes:
         return json.dumps(x, **kwargs).encode(
-            encoding=encoding or "utf-8", errors=errors or "strict"
+            encoding=encoding or 'utf-8', errors=errors or 'strict'
         )
 
     @classmethod
     def deserialize(cls, y, *, encoding=None, errors=None, **kwargs):
         with _gc(y):
             return json.loads(
-                y.decode(encoding=encoding or "utf-8", errors=errors or "strict"),
+                y.decode(encoding=encoding or 'utf-8', errors=errors or 'strict'),
                 **kwargs,
             )
 

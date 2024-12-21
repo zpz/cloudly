@@ -111,7 +111,7 @@ class Upath(abc.ABC):
                 Google Cloud Storage. Please see subclasses for specifics.
         """
 
-        self._path = os.path.normpath(os.path.join("/", *pathsegments))  # pylint: disable=no-value-for-parameter
+        self._path = os.path.normpath(os.path.join('/', *pathsegments))  # pylint: disable=no-value-for-parameter
         # For LocalUpath on Windows, this is like 'C:\\Users\\username\\path'.
         # For LocalUpath on Linux, and BlobUpath, this is always absolute starting with '/'.
         # It does not have a trailing `/` unless the path is just `/` itself.
@@ -174,12 +174,12 @@ class Upath(abc.ABC):
             return
 
         pbar = None
-        executor = get_shared_thread_pool("upathlib", MAX_THREADS)
+        executor = get_shared_thread_pool('upathlib', MAX_THREADS)
 
         if not quiet:
             pbar = tqdm(
                 total=n_tasks,
-                bar_format="{percentage:5.1f}%, {n:.0f}/{total_fmt}, {elapsed} | {desc}",
+                bar_format='{percentage:5.1f}%, {n:.0f}/{total_fmt}, {elapsed} | {desc}',
             )
 
         def enqueue(tasks, executor, q, to_stop):
@@ -437,7 +437,7 @@ class Upath(abc.ABC):
         """
         # TODO: the implementation is a little hacky.
         r = self.root
-        r._path = os.path.normpath(os.path.join("/", *paths))
+        r._path = os.path.normpath(os.path.join('/', *paths))
         return r
 
     def joinpath(self, *other: str) -> Self:
@@ -551,7 +551,7 @@ class Upath(abc.ABC):
         ``encoding`` and ``errors`` are passed to `encode() <https://docs.python.org/3/library/stdtypes.html#str.encode>`_.
         Usually you should leave them at the default values.
         """
-        z = data.encode(encoding=encoding or "utf-8", errors=errors or "strict")
+        z = data.encode(encoding=encoding or 'utf-8', errors=errors or 'strict')
         self.write_bytes(z, overwrite=overwrite)
 
     def read_text(
@@ -569,7 +569,7 @@ class Upath(abc.ABC):
         # Refer to https://docs.python.org/3/library/functions.html#open
         # and https://docs.python.org/3/library/codecs.html#module-codecs
         return self.read_bytes().decode(
-            encoding=encoding or "utf-8", errors=errors or "strict"
+            encoding=encoding or 'utf-8', errors=errors or 'strict'
         )
 
     def write_json(self, data: Any, *, overwrite=False, **kwargs) -> None:
@@ -610,14 +610,14 @@ class Upath(abc.ABC):
                     yield (
                         getattr(p, method),
                         (target / extra,),
-                        {"overwrite": ovwt},
+                        {'overwrite': ovwt},
                         extra,
                     )
                 else:
                     yield (
                         getattr(target / extra, method),
                         (p,),
-                        {"overwrite": ovwt},
+                        {'overwrite': ovwt},
                         extra,
                     )
 
@@ -671,11 +671,11 @@ class Upath(abc.ABC):
             return 0
 
         if not quiet:
-            print(f"Copying from {source!r} into {target!r}", file=sys.stderr)
+            print(f'Copying from {source!r} into {target!r}', file=sys.stderr)
         return self._dir_to_dir(
             source=source,
             target=target,
-            method="copy_file",
+            method='copy_file',
             method_on_source=False,
             overwrite=overwrite,
             quiet=quiet,
@@ -824,8 +824,8 @@ class Upath(abc.ABC):
         ``concurrent`` is ``False`` by default because this method is often used in
         ``__del__`` of user classes, and thread pool is problematic in ``__del__``.
         """
-        if self._path == "/":
-            raise UnsupportedOperation("`rmrf` not allowed on root directory")
+        if self._path == '/':
+            raise UnsupportedOperation('`rmrf` not allowed on root directory')
         try:
             self.remove_file()
         except (FileNotFoundError, IsADirectoryError):

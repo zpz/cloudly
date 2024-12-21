@@ -33,7 +33,7 @@ class BlobUpath(Upath):
         contains ``'/'``, which has no special role in the name per se but is *interpreted*
         by users to be a directory separator.
         """
-        return self._path.lstrip("/")
+        return self._path.lstrip('/')
 
     def is_dir(self) -> bool:
         """In a typical blob store, there is no such concept as a
@@ -72,16 +72,16 @@ class BlobUpath(Upath):
         Expected to be refined by subclasses.
         """
         p0 = self._path  # this could be '/'.
-        if not p0.endswith("/"):
-            p0 += "/"
+        if not p0.endswith('/'):
+            p0 += '/'
         np0 = len(p0)
         subdirs = set()
         for p in self.riterdir():
             tail = p._path[np0:]
-            if tail.startswith("/"):
+            if tail.startswith('/'):
                 raise ValueError(f"malformed blob name: '{p._path}'")
-            if "/" in tail:
-                tail = tail[: tail.find("/")]
+            if '/' in tail:
+                tail = tail[: tail.find('/')]
             if tail not in subdirs:
                 yield self / tail
                 subdirs.add(tail)

@@ -14,7 +14,6 @@ import time
 from collections.abc import Iterator
 from io import BufferedReader, BytesIO, UnsupportedOperation
 
-from cloudly.gcp.auth import get_credentials, get_project_id
 from google import resumable_media
 from google.api_core.exceptions import (
     NotFound,
@@ -28,6 +27,8 @@ from google.cloud.storage.retry import (
 )
 from typing_extensions import Self
 
+from cloudly.gcp.auth import get_credentials, get_project_id
+
 # Many blob methods have a parameter `timeout`.
 # The default value, 60 seconds, is defined as ``google.cloud.storage.constants._DEFAULT_TIMEOUT``.
 # From my reading, this is the `timeout` parameter to `google.cloud.storage.client._connection.api_request`,
@@ -39,7 +40,15 @@ from typing_extensions import Self
 # If you want to increase the timeout (default to 120) across the board,
 # you may hack certain attributes of this object.
 # See `google.api_core.retry.exponential_sleep_generator`.
-from cloudly.upathlib import BlobUpath, LocalUpath, LocalPathType, FileInfo, LockAcquireError, LockReleaseError, Upath
+from cloudly.upathlib import (
+    BlobUpath,
+    FileInfo,
+    LocalPathType,
+    LocalUpath,
+    LockAcquireError,
+    LockReleaseError,
+    Upath,
+)
 from cloudly.upathlib._blob import _resolve_local_path
 from cloudly.upathlib._util import MAX_THREADS, get_shared_thread_pool
 
@@ -62,7 +71,7 @@ NOTSET = object()
 # The availability of `Retry.with_timeout` is in a messy state
 # between versions of `google-api-core`.
 # `upathlib` requires a recent version which should be fine.
-assert hasattr(DEFAULT_RETRY, "with_timeout")
+assert hasattr(DEFAULT_RETRY, 'with_timeout')
 
 
 class GcsBlobUpath(BlobUpath):
@@ -134,9 +143,9 @@ class GcsBlobUpath(BlobUpath):
             #   'gs://bucket-name/path...'
 
             p0 = paths[0]
-            assert p0.startswith("gs://"), p0
+            assert p0.startswith('gs://'), p0
             p0 = p0[5:]
-            k = p0.find("/")
+            k = p0.find('/')
             if k < 0:
                 bucket_name = p0
                 paths = paths[1:]
@@ -225,13 +234,13 @@ class GcsBlobUpath(BlobUpath):
         ``is_dir()`` returns ``True`` if and only if there are blobs
         "under" the current path.
         """
-        prefix = self.blob_name + "/"
+        prefix = self.blob_name + '/'
         blobs = self._client().list_blobs(
             self._bucket(),
             prefix=prefix,
             max_results=1,
             page_size=1,
-            fields="items(name),nextPageToken",
+            fields='items(name),nextPageToken',
         )
         return len(list(blobs)) > 0
 
@@ -275,7 +284,7 @@ class GcsBlobUpath(BlobUpath):
         size=None,
         retry=DEFAULT_RETRY,
     ):
-        if self._path == "/":
+        if self._path == '/':
             raise UnsupportedOperation(f"can not write to root as a blob: '{self}'")
 
         # `Blob.upload_from_file` gets the data by `file.obj.read()` and uses the data
@@ -389,7 +398,7 @@ class GcsBlobUpath(BlobUpath):
             # `google.cloud.storage.blob.Blob._do_download`, and its use of
             # `google.resumable_media.requests.RawDownload` (passing `stream=None` to it).
 
-        executor = get_shared_thread_pool("upathlib-gcs", MAX_THREADS - 2)
+        executor = get_shared_thread_pool('upathlib-gcs', MAX_THREADS - 2)
         k = 0
         tasks = []
         while True:
@@ -488,7 +497,7 @@ class GcsBlobUpath(BlobUpath):
 
         os.makedirs(str(target.parent), exist_ok=True)
         try:
-            with open(target, "wb") as file_obj:
+            with open(target, 'wb') as file_obj:
                 # If `target` is an existing directory,
                 # will raise `IsADirectoryError`.
                 self._read_into_buffer(file_obj, concurrent=concurrent)
@@ -513,7 +522,7 @@ class GcsBlobUpath(BlobUpath):
                 raise FileExistsError(f"File exists: '{self}'")
             self.remove_file()
 
-        with open(filename, "rb") as file_obj:
+        with open(filename, 'rb') as file_obj:
             total_bytes = os.fstat(file_obj.fileno()).st_size
             self._write_from_buffer(
                 file_obj,
@@ -563,9 +572,9 @@ class GcsBlobUpath(BlobUpath):
         # seems to create a dummy blob named with a '/' at the end and sized 0.
         # This case is handled in this function.
 
-        prefix = self.blob_name + "/"
+        prefix = self.blob_name + '/'
         k = len(prefix)
-        blobs = self._client().list_blobs(self._bucket(), prefix=prefix, delimiter="/")
+        blobs = self._client().list_blobs(self._bucket(), prefix=prefix, delimiter='/')
         for p in blobs:
             if p.name == prefix:
                 # This happens if users has used the dashboard to "create a folder".
@@ -576,7 +585,7 @@ class GcsBlobUpath(BlobUpath):
             obj = self / p.name[k:]  # files
             yield obj
         for p in blobs.prefixes:
-            yield self / p[k:].rstrip("/")  # "subdirectories"
+            yield self / p[k:].rstrip('/')  # "subdirectories"
             # If this is an "empty subfolder", it is counted but it can be
             # misleading. User should avoid creating such empty folders.
 
@@ -586,9 +595,9 @@ class GcsBlobUpath(BlobUpath):
         Return the number of blobs removed.
         """
         z = super().remove_dir(**kwargs)
-        prefix = self.blob_name + "/"
+        prefix = self.blob_name + '/'
         for p in self._client().list_blobs(self._bucket(), prefix=prefix):
-            assert p.name.endswith("/"), p.name
+            assert p.name.endswith('/'), p.name
             p.delete()
         return z
 
@@ -605,10 +614,10 @@ class GcsBlobUpath(BlobUpath):
         """
         Yield all blobs recursively under the current dir.
         """
-        prefix = self.blob_name + "/"
+        prefix = self.blob_name + '/'
         k = len(prefix)
         for p in self._client().list_blobs(self._bucket(), prefix=prefix):
-            if p.name.endswith("/"):
+            if p.name.endswith('/'):
                 # This can be an "empty folder"---better not create them!
                 # Worse, this is an actual blob name---do not do this!
                 continue
@@ -623,11 +632,11 @@ class GcsBlobUpath(BlobUpath):
         # Tweaking on the retry timing considers the particular use case with `upathlib.Multiplexer`.
         # Similarly in `_release_lease`.
 
-        if self._path == "/":
-            raise UnsupportedOperation("can not write to root as a blob", self)
+        if self._path == '/':
+            raise UnsupportedOperation('can not write to root as a blob', self)
 
         t0 = time.perf_counter()
-        lockfile = self.with_suffix(self.suffix + ".lock")
+        lockfile = self.with_suffix(self.suffix + '.lock')
         try:
             try:
                 Retry(
@@ -637,7 +646,7 @@ class GcsBlobUpath(BlobUpath):
                     multiplier=1.2,
                     timeout=timeout,
                 )(lockfile.write_bytes)(
-                    b"0",
+                    b'0',
                     overwrite=False,
                 )
                 self._generation = lockfile._blob_.generation
@@ -679,7 +688,7 @@ class GcsBlobUpath(BlobUpath):
         # TODO:
         # once got "RemoteDisconnected" error after 0.01 seconds.
         t0 = time.perf_counter()
-        lockfile = self.with_suffix(self.suffix + ".lock")
+        lockfile = self.with_suffix(self.suffix + '.lock')
         try:
             try:
                 try:
@@ -737,7 +746,7 @@ class GcsBlobUpath(BlobUpath):
             if self._lock_count == 0:
                 self._release_lease()
 
-    def open(self, mode="r", **kwargs):
+    def open(self, mode='r', **kwargs):
         """
         Use this on a blob (not a "directory") as a context manager.
         See Google documentation.

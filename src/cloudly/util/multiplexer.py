@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from typing import TypeVar
 
 from cloudly.upathlib import PathType, Upath
+
 from .versioned_uploadable import make_version, utcnow
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ def decode(y: str):
     return pickle.loads(base64.standard_b64decode(y.encode()))
 
 
-Element = TypeVar("Element")
+Element = TypeVar('Element')
 
 
 class Multiplexer(Iterable[Element], Sized):
@@ -111,7 +112,7 @@ class Multiplexer(Iterable[Element], Sized):
         data = list(data)
         path = resolve_path(path) / make_version(tag)
         assert len(data) > 0
-        (path / "data.pickle").write_pickle(data)
+        (path / 'data.pickle').write_pickle(data)
         mux_id = encode((path, None))
         return cls(mux_id)
 
@@ -135,13 +136,13 @@ class Multiplexer(Iterable[Element], Sized):
         """
         self.path, self._session_id = decode(mux_id)
         self._worker_id = worker_id
-        self._data = (self.path / "data.pickle").read_pickle()
+        self._data = (self.path / 'data.pickle').read_pickle()
         self._timeout = timeout
 
     @property
     def worker_id(self) -> str:
         if not self._worker_id:
-            self._worker_id = "{} {}".format(
+            self._worker_id = '{} {}'.format(
                 multiprocessing.current_process().name,
                 threading.current_thread().name,
             )
@@ -153,7 +154,7 @@ class Multiplexer(Iterable[Element], Sized):
     def __setstate__(self, data):
         self.path, self._session_id, self._timeout = data
         self._worker_id = None
-        self._data = (self.path / "data.pickle").read_pickle()
+        self._data = (self.path / 'data.pickle').read_pickle()
 
     def __len__(self) -> int:
         """
@@ -162,7 +163,7 @@ class Multiplexer(Iterable[Element], Sized):
         return len(self._data)
 
     def _mux_info_file(self, session_id: str) -> Upath:
-        return self.path / ".mux" / session_id / "info.json"
+        return self.path / '.mux' / session_id / 'info.json'
 
     def create_read_session(self) -> str:
         """
@@ -201,11 +202,11 @@ class Multiplexer(Iterable[Element], Sized):
         session_id = datetime.now(timezone.utc).isoformat()
         finfo = self._mux_info_file(session_id)
         data = {
-            "total": str(len(self)),
-            "next": "0",
-            "time": utcnow().isoformat(),
+            'total': str(len(self)),
+            'next': '0',
+            'time': utcnow().isoformat(),
         }
-        if str(finfo).startswith("gs://"):
+        if str(finfo).startswith('gs://'):
             finfo.write_text(
                 f"This is the control file. Created at {data['time']}. Actual control info is in the blob's metadata.",
                 overwrite=False,
@@ -225,23 +226,23 @@ class Multiplexer(Iterable[Element], Sized):
         finfo = self._mux_info_file(self._session_id)
         while True:
             with finfo.lock(timeout=timeout):
-                if str(finfo).startswith("gs://"):
+                if str(finfo).startswith('gs://'):
                     ss = finfo.read_meta()
                 else:
                     ss = finfo.read_json()
 
-                n = ss["next"]
-                if n == ss["total"]:
+                n = ss['next']
+                if n == ss['total']:
                     return
                 n = int(n)
                 data = {
-                    "total": ss["total"],
-                    "next": str(n + 1),
-                    "worker_id": worker_id,
-                    "time": utcnow().isoformat(),
+                    'total': ss['total'],
+                    'next': str(n + 1),
+                    'worker_id': worker_id,
+                    'time': utcnow().isoformat(),
                 }
 
-                if str(finfo).startswith("gs://"):
+                if str(finfo).startswith('gs://'):
                     finfo.write_meta(data)
                 else:
                     finfo.write_json(data, overwrite=True)
@@ -275,7 +276,7 @@ class Multiplexer(Iterable[Element], Sized):
             return self.__class__(mux_id).stat()
         assert self._session_id
         finfo = self._mux_info_file(self._session_id)
-        if str(finfo).startswith("gs://"):
+        if str(finfo).startswith('gs://'):
             return finfo.read_meta
         return finfo.read_json()
 
@@ -290,7 +291,7 @@ class Multiplexer(Iterable[Element], Sized):
         in which the current object is participating.
         """
         ss = self.stat(mux_id)
-        return ss["next"] == ss["total"]
+        return ss['next'] == ss['total']
 
     def destroy(self) -> None:
         """

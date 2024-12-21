@@ -19,40 +19,47 @@ simply uses the common API to operate the storage.
 """
 
 __all__ = [
-    'Upath', 'LocalUpath', 'BlobUpath',
-    'PathType', 'LocalPathType', 'resolve_path',
-    'FileInfo', 'LockAcquireError', 'LockReleaseError',
+    'Upath',
+    'LocalUpath',
+    'BlobUpath',
+    'PathType',
+    'LocalPathType',
+    'resolve_path',
+    'FileInfo',
+    'LockAcquireError',
+    'LockReleaseError',
     'serializer',
 ]
 
 
 from pathlib import Path
 
+from . import serializer
 from ._blob import BlobUpath
 from ._local import LocalPathType, LocalUpath
 from ._upath import FileInfo, LockAcquireError, LockReleaseError, PathType, Upath
 
-from . import serializer
-
 
 def resolve_path(path: PathType) -> Upath:
     if isinstance(path, str):
-        if path.startswith("gs://"):
+        if path.startswith('gs://'):
             # If you encounter a "gs://..." path but
             # you haven't installed GCS dependencies,
             # you'll get an exception!
             from cloudly.gcp.storage import GcsBlobUpath
+
             return GcsBlobUpath(path)
-        if path.startswith("s3://"):
-            raise NotImplementedError("AWS S3 storage is not implemented")
-        if path.startswith("https://"):
-            if "blob.core.windows.net" in path:
+        if path.startswith('s3://'):
+            raise NotImplementedError('AWS S3 storage is not implemented')
+        if path.startswith('https://'):
+            if 'blob.core.windows.net' in path:
                 from cloudly.azure.storage import AzureBlobUpath
+
                 return AzureBlobUpath(path)
             raise ValueError(f"unrecognized value: '{path}'")
         path = Path(path)
     if isinstance(path, Path):
         return LocalUpath(str(path.resolve().absolute()))
     if not isinstance(path, Upath):
-        raise TypeError(f"`{type(path)}` is provided while `{PathType}` is expected")
+        raise TypeError(f'`{type(path)}` is provided while `{PathType}` is expected')
     return path

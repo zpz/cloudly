@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-__all__ = ["AzureBlobUpath"]
+__all__ = ['AzureBlobUpath']
 
 
 # Enable using `Upath` in type annotations in the code
@@ -31,15 +31,21 @@ from azure.core.exceptions import (
 from azure.storage.blob import BlobClient, BlobLeaseClient, ContainerClient
 from typing_extensions import Self
 
-from cloudly.upathlib import BlobUpath, LocalUpath, LocalPathType, FileInfo, Upath, LockAcquireError, LockReleaseError
+from cloudly.upathlib import (
+    BlobUpath,
+    FileInfo,
+    LocalPathType,
+    LocalUpath,
+    LockAcquireError,
+    LockReleaseError,
+    Upath,
+)
 from cloudly.upathlib._blob import _resolve_local_path
 from cloudly.util.datetime import utcnow
-
 
 # End user may want to do this:
 # logging.getLogger("azure.storage").setLevel(logging.WARNING)
 # logging.getLogger("azure.core.pipeline.policies").setLevel(logging.WARNING)
-
 
 
 class AzureBlobUpath(BlobUpath):
@@ -54,8 +60,8 @@ class AzureBlobUpath(BlobUpath):
         # TODO: does Azure have a way to infer this info if the code
         # is running on an Azure machine?
         return {
-            "account_url": f"https://{cls._ACCOUNT_NAME}.blob.core.windows.net",
-            "credential": cls._SAS_TOKEN or cls._ACCOUNT_KEY,
+            'account_url': f'https://{cls._ACCOUNT_NAME}.blob.core.windows.net',
+            'credential': cls._SAS_TOKEN or cls._ACCOUNT_KEY,
         }
 
     def __init__(
@@ -66,13 +72,13 @@ class AzureBlobUpath(BlobUpath):
         if container_name is None:
             assert len(paths) == 1, paths
             path = paths[0]
-            account_url = self.get_account_info()["account_url"]
+            account_url = self.get_account_info()['account_url']
             assert path.startswith(account_url), path
             path = path[len(account_url) :]
-            k = path.find("/")
+            k = path.find('/')
             if k < 0:
                 container_name = path
-                paths = ("/",)
+                paths = ('/',)
             else:
                 container_name = path[:k]
                 paths = (path[k:],)
@@ -155,7 +161,7 @@ class AzureBlobUpath(BlobUpath):
                     source._blob_client.url,
                     requires_sync=True,
                 )
-                assert copy["copy_status"] == "success", copy["copy_status"]
+                assert copy['copy_status'] == 'success', copy['copy_status']
 
     def _copy_file(self, source: Upath, target: Upath, *, overwrite=False):
         if isinstance(source, AzureBlobUpath):
@@ -185,7 +191,7 @@ class AzureBlobUpath(BlobUpath):
             # TODO: check behavior of `download_blob` about
             # overwrite.
             os.makedirs(str(target.parent), exist_ok=True)
-            with open(str(target), "wb") as f:
+            with open(str(target), 'wb') as f:
                 data = self._blob_client.download_blob()
                 data.readinto(f)
 
@@ -198,12 +204,12 @@ class AzureBlobUpath(BlobUpath):
                 raise FileExistsError(f"File exists: '{self}'")
             self.remove_file()
         with self._provide_blob_client():
-            with open(str(source), "rb") as data:
+            with open(str(source), 'rb') as data:
                 self._blob_client.upload_blob(data)
 
     def iterdir(self) -> Iterator[Self]:
         with self._provide_container_client():
-            prefix = self.blob_name + "/"
+            prefix = self.blob_name + '/'
             k = len(prefix)
             for p in self._container_client.walk_blobs(name_starts_with=prefix):
                 yield self / p.name[k:]
@@ -223,7 +229,7 @@ class AzureBlobUpath(BlobUpath):
                 except ResourceNotFoundError:
                     continue  # go to the outer looper to write the file again
                 except HttpResponseError as e:
-                    if e.status_code == 409 and e.error_code == "LeaseAlreadyPresent":  # pylint: disable=no-member
+                    if e.status_code == 409 and e.error_code == 'LeaseAlreadyPresent':  # pylint: disable=no-member
                         # Having a lease held by others. Continue to wait.
                         # This may happen when another client placed the lease
                         # on this blob right after we've created it, that is,
@@ -232,7 +238,7 @@ class AzureBlobUpath(BlobUpath):
                     else:
                         raise
             except HttpResponseError as e:
-                if e.status_code == 412 and e.error_code == "LeaseIdMissing":  # pylint: disable=no-member
+                if e.status_code == 412 and e.error_code == 'LeaseIdMissing':  # pylint: disable=no-member
                     # Blob exists and has a lease on it. Wait and try again.
                     pass
                 else:
@@ -270,7 +276,7 @@ class AzureBlobUpath(BlobUpath):
                         self._lock_count = 0
                     except Exception as e:
                         raise LockReleaseError(
-                            f"failed to release lock file {self}"
+                            f'failed to release lock file {self}'
                         ) from e
 
     # @asynccontextmanager
@@ -341,20 +347,20 @@ class AzureBlobUpath(BlobUpath):
         with self._provide_blob_client():
             try:
                 self._blob_client.delete_blob(
-                    delete_snapshots="include", lease=self._lease
+                    delete_snapshots='include', lease=self._lease
                 )
             except ResourceNotFoundError:
                 raise FileNotFoundError(f"No such file: '{self}'")
 
     def riterdir(self) -> Iterator[Self]:
         with self._provide_container_client():
-            prefix = self.blob_name + "/"
+            prefix = self.blob_name + '/'
             k = len(prefix)
             for p in self._container_client.list_blobs(name_starts_with=prefix):
                 yield self / p.name[k:]
 
     def write_bytes(self, data: bytes | BufferedReader, *, overwrite=False) -> None:
-        if self._path == "/":
+        if self._path == '/':
             raise UnsupportedOperation(f"Can not write to root as a blob: '{self}'")
 
         with self._provide_blob_client():

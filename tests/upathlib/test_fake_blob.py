@@ -24,12 +24,12 @@ class FakeBlobStore:
 
     def __init__(self):
         self._data = {
-            "bucket_a": {},
-            "bucket_b": {},
+            'bucket_a': {},
+            'bucket_b': {},
         }
         self._meta = {
-            "bucket_a": {},
-            "bucket_b": {},
+            'bucket_a': {},
+            'bucket_b': {},
         }
 
     def write_bytes(self, bucket: str, name: str, data: bytes, overwrite: bool = False):
@@ -101,7 +101,7 @@ class FakeBlobUpath(BlobUpath):
         self._bucket = bucket
 
     def as_uri(self) -> str:
-        return f"fake://{self._path}"
+        return f'fake://{self._path}'
 
     def file_info(self):
         return _store.file_info(self._bucket, self._path)
@@ -130,8 +130,8 @@ class FakeBlobUpath(BlobUpath):
 
     def riterdir(self) -> Iterator[Self]:
         p = self._path
-        if not p.endswith("/"):
-            p += "/"
+        if not p.endswith('/'):
+            p += '/'
         for pp in _store.list_blobs(self._bucket, p):
             yield self / pp[len(p) :]
 
@@ -143,7 +143,7 @@ class FakeBlobUpath(BlobUpath):
 
     @property
     def root(self) -> Self:
-        return self.__class__("/", bucket=self._bucket)
+        return self.__class__('/', bucket=self._bucket)
 
     def write_bytes(self, data, *, overwrite=False):
         try:
@@ -153,7 +153,7 @@ class FakeBlobUpath(BlobUpath):
 
 
 def test_all():
-    p = FakeBlobUpath("/tmp/test", bucket="bucket_a") / str(uuid4())
+    p = FakeBlobUpath('/tmp/test', bucket='bucket_a') / str(uuid4())
     try:
         p.rmrf()
         alltests.test_all(p)
