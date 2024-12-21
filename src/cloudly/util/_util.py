@@ -98,7 +98,7 @@ class Seq(Protocol[Element]):
     In particular, ``Sequence`` implements this protocol, hence is considered a subclass
     of ``Seq`` for type checking purposes:
 
-    >>> from biglist import Seq
+    >>> from cloudly.util._util import Seq
     >>> from collections.abc import Sequence
     >>> issubclass(Sequence, Seq)
     True
