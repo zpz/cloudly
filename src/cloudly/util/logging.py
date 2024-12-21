@@ -15,12 +15,14 @@ and then just use ``logger`` to write logs without concern about formatting,
 destination of the log message, etc.
 """
 
+__all__ = ['config_logger', 'set_level', 'add_console_handler']
+
+
 import inspect
 import logging
 import logging.handlers
 import os
 import sys
-import time
 import warnings
 from datetime import datetime
 from logging import Formatter
@@ -56,47 +58,6 @@ rootlogger = logging.getLogger()
 logger = logging.getLogger(__name__)
 
 
-def get_calling_file() -> inspect.FrameInfo:
-    """
-    This function finds the "launch script" of the currently running program.
-    The "launch script" is either a `.py` file or the Python interpreter.
-
-    The returned object has attribute `filename`, which is the full path of the launch script.
-    The value `'<stdin>'` suggests the Python interpreter, i.e. it's in an interactive Python session.
-
-        $ ptpython
-        >>> from cloudly.util.logging import get_calling_file
-        >>> def func_a():
-        ...     return get_calling_file()
-        >>> def func_b():
-        ...     z = func_a()
-        ...     print(z)
-        ...     print()
-        ...     print(z.filename)
-        >>> func_b()
-        FrameInfo(frame=<frame at 0x7f54d8009e30, file '<stdin>', line 2, code func_a>, filename='<stdin>', lineno=2, function='func_a', code_context=None, index=None)
-
-        <stdin>
-        >>>
-    """
-    st = inspect.stack()
-    caller = None
-    for s in st:
-        if os.path.basename(s.filename) == 'runpy.py':
-            # `runpy.py` is usually what finds and launches the module specified by the
-            # `-m` command line switch. So, the last step was the user script. Stop here.
-            break
-        if '_pytest/python.py' in s.filename:
-            # Don't follow into py.test; stop at the test file
-            break
-        if s.filename == '<stdin>':
-            # This is the Python interpreter.
-            caller = s
-            break
-        caller = s
-    return caller
-
-
 class DynamicFormatter(Formatter):
     def __init__(self, *args, **kwargs):
         # TODO: could add parameters to customize formatting, as new ideas emerges.
@@ -105,8 +66,10 @@ class DynamicFormatter(Formatter):
 
     def format(self, record):
         r = record
-        asctime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(r.created))
-        fmt = f'[{asctime}.{int((r.created % 1) * 10000)} {self._tz}, {r.levelname}]  %(message)s  [({r.filename}, {r.lineno}, {r.funcName}'
+        # asctime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(r.created))
+        # msecs = int((r.created % 1) * 10000)
+        # fmt = f'[{asctime}.{msecs} {self._tz}, {r.levelname}]  %(message)s  [({r.filename}, {r.lineno}, {r.funcName}'
+        fmt = f'%(asctime)s {self._tz} {r.levelname: <12}  %(message)s     [( {r.name}, {r.lineno}, {r.funcName}'
 
         p = r.processName
         t = r.threadName
@@ -116,25 +79,25 @@ class DynamicFormatter(Formatter):
         if p == 'MainProcess':
             if t == 'MainThread':
                 if tk is None:
-                    fmt += ')]'
+                    fmt += ' )]'
                 else:
-                    fmt += f' | {tk})]'
+                    fmt += f' | {tk} )]'
             else:
                 if tk is None:
-                    fmt += f' | {t})]'
+                    fmt += f' | {t} )]'
                 else:
-                    fmt += f' | {t}, {tk})]'
+                    fmt += f' | {t}, {tk} )]'
         else:
             if t == 'MainThread':
                 if tk is None:
-                    fmt += f' | {p} <{r.process}>)]'
+                    fmt += f' | {p} <{r.process}> )]'
                 else:
-                    fmt += f' | {p} <{r.process}>, {tk})]'
+                    fmt += f' | {p} <{r.process}>, {tk} )]'
             else:
                 if tk is None:
-                    fmt += f' | {p} <{r.process}>, {t})]'
+                    fmt += f' | {p} <{r.process}>, {t} )]'
                 else:
-                    fmt += f' | {p} <{r.process}>, {t}, {tk})]'
+                    fmt += f' | {p} <{r.process}>, {t}, {tk} )]'
 
         formatter = Formatter(fmt)
         return formatter.format(record)
@@ -165,6 +128,12 @@ def add_console_handler():
     h = logging.StreamHandler()
     h.setFormatter(DynamicFormatter())
     rootlogger.addHandler(h)
+
+
+def config_logger(level=logging.INFO):
+    # For use in one-off scripts.
+    set_level(level)
+    add_console_handler()
 
 
 def add_disk_handler(
@@ -223,7 +192,42 @@ def log_uncaught_exception(handlers=None, logger=logger):
     sys.excepthook = handle_exception
 
 
-def config_logger(level=logging.INFO, **kwargs):
-    # For use in one-off scripts.
-    set_level(level)
-    add_console_handler(**kwargs)
+def get_calling_file() -> inspect.FrameInfo:
+    """
+    This function finds the "launch script" of the currently running program.
+    The "launch script" is either a `.py` file or the Python interpreter.
+
+    The returned object has attribute `filename`, which is the full path of the launch script.
+    The value `'<stdin>'` suggests the Python interpreter, i.e. it's in an interactive Python session.
+
+        $ ptpython
+        >>> from cloudly.util.logging import get_calling_file
+        >>> def func_a():
+        ...     return get_calling_file()
+        >>> def func_b():
+        ...     z = func_a()
+        ...     print(z)
+        ...     print()
+        ...     print(z.filename)
+        >>> func_b()
+        FrameInfo(frame=<frame at 0x7f54d8009e30, file '<stdin>', line 2, code func_a>, filename='<stdin>', lineno=2, function='func_a', code_context=None, index=None)
+
+        <stdin>
+        >>>
+    """
+    st = inspect.stack()
+    caller = None
+    for s in st:
+        if os.path.basename(s.filename) == 'runpy.py':
+            # `runpy.py` is usually what finds and launches the module specified by the
+            # `-m` command line switch. So, the last step was the user script. Stop here.
+            break
+        if '_pytest/python.py' in s.filename:
+            # Don't follow into py.test; stop at the test file
+            break
+        if s.filename == '<stdin>':
+            # This is the Python interpreter.
+            caller = s
+            break
+        caller = s
+    return caller

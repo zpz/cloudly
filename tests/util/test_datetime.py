@@ -1,10 +1,13 @@
+from datetime import datetime
+
+from boltons import timeutils
+
 from cloudly.util.datetime import (
     centralnow,
     easternnow,
-    isoformatnow,
+    isonow,
     mountainnow,
     pacificnow,
-    tznow,
     utcnow,
 )
 
@@ -22,15 +25,15 @@ def test_datetime():
     print()
     print(utcnow())
     print(pacificnow())
-    assert_same_time(utcnow(), tznow('utc'))
-    assert_same_time(easternnow(), tznow('America/New_York'))
-    assert_same_time(centralnow(), tznow('America/Chicago'))
-    assert_same_time(mountainnow(), tznow('America/Denver'))
-    assert_same_time(pacificnow(), tznow('America/Los_Angeles'))
+    assert_same_time(utcnow(), datetime.now(timeutils.UTC))
+    assert_same_time(easternnow(), datetime.now(timeutils.Eastern))
+    assert_same_time(centralnow(), datetime.now(timeutils.Central))
+    assert_same_time(mountainnow(), datetime.now(timeutils.Mountain))
+    assert_same_time(pacificnow(), datetime.now(timeutils.Pacific))
 
 
-def test_isoformatnow():
-    t1 = isoformatnow()
+def test_isonow():
+    t1 = isonow()
     t2 = utcnow().strftime('%Y-%m-%dT%H:%M:%S.%f')
     print()
     print(t1)

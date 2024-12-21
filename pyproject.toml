@@ -9,7 +9,11 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
+    "filelock >= 3.9.1",
+    "tqdm",
+    "typing-extensions",
     "tzdata",
+    "zstandard",
 ]
 requires-python = ">=3.10"
 readme = "README.rst"
@@ -32,13 +36,24 @@ doc = [
     "numpydoc",
     "pydata-sphinx-theme",
 ]
+azure = [
+    "azure-storage-blob >=12.9.0,<13.0",
+]
 gcp = [
     "google-auth",
     "google-api-core",
+    "google-api-python-client >=2.13.9,<3.0",
     "google-cloud-secret-manager",
+    "google-cloud-logging",
+    "google-cloud-storage >=2.0,<3.0",
+    "requests",
 ]
 test = [
     "pytest-asyncio",
+    "pytest-mock",
+    "boltons",
+    "lz4",
+    "orjson",
 ]
 
 
