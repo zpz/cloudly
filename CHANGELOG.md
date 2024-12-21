@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.1.0] - in progress
 
-- Merged package `upathlib` into `cloudly`.
+- Merged package `upathlib` into `cloudly`. For change log of the `upathlib` code up to this point, see the [original `upathlib` repo](https://github.com/zpz/upathlib)/
 
 
 ## [0.0.5] - 2024-12-16
