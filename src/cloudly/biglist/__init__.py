@@ -36,19 +36,21 @@ as well as "chaining up" a series of biglists. These utilities work not only for
 but also for any :class:`Seq`.
 """
 
-from __future__ import annotations
-
 __all__ = [
     'Biglist',
     'BiglistFileReader',
     'ParquetBiglist',
     'ParquetFileReader',
+    'parquet',
 ]
 
 
 from ._biglist import (
     Biglist,
     BiglistFileReader,
+)
+from ._parquet_biglist import (
     ParquetBiglist,
     ParquetFileReader,
 )
+from . import parquet

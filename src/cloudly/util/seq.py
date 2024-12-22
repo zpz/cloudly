@@ -90,7 +90,7 @@ class Seq(Protocol[Element]):
     whereas the latter adds ``__contains__``, ``__reversed__``, ``index`` and ``count``
     to these three. Although the extra methods can be implemented using the three basic methods,
     they could be massively inefficient in particular cases, and that is the case
-    in the applications targeted by ``biglist``.
+    in the applications targeted by ``cloudly.biglist``.
     For this reason, the classes defined in this package implement the protocol ``Seq``
     rather than ``Sequence``, to prevent the illusion that methods ``__contains__``, etc.,
     are usable.

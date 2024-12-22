@@ -36,7 +36,7 @@ from typing import (
 from tqdm.auto import tqdm
 from typing_extensions import Self
 
-from ._serializer import (
+from .serializer import (
     JsonSerializer,
     PickleSerializer,
     ZstdPickleSerializer,

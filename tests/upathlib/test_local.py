@@ -6,7 +6,7 @@ import pytest
 
 import cloudly.upathlib._tests as alltests
 from cloudly.upathlib import LocalUpath
-from cloudly.upathlib._serializer import Lz4PickleSerializer
+from cloudly.upathlib.serializer import Lz4PickleSerializer
 
 
 @pytest.fixture
