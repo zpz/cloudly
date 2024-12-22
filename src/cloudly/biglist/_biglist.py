@@ -9,7 +9,7 @@ import os
 import string
 import threading
 import warnings
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -25,11 +25,10 @@ from cloudly.upathlib.serializer import (
 )
 from cloudly.util.seq import Element
 
-from ._base import BiglistBase, _biglist_objs, get_global_thread_pool
+from ._base import BiglistBase, _biglist_objs
 from ._util import (
     FileReader,
     FileSeq,
-    ParquetFileReader,
     ParquetSerializer,
     make_parquet_schema,
 )
@@ -875,4 +874,3 @@ class BiglistFileSeq(FileSeq[BiglistFileReader]):
 
 
 Biglist.register_storage_format('parquet', ParquetSerializer)
-

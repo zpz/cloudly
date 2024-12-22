@@ -3,10 +3,8 @@ from __future__ import annotations
 import io
 import itertools
 import logging
-from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
 from multiprocessing.util import Finalize
-from typing import TypeVar
 
 import pyarrow
 from pyarrow.fs import FileSystem, GcsFileSystem
@@ -18,9 +16,9 @@ try:
     from cloudly.gcp.auth import get_credentials
 except ImportError:
     pass
-from cloudly.util.seq import Element, Seq, locate_idx_in_chunked_seq
-from ._util import FileReader
+from cloudly.util.seq import Seq, locate_idx_in_chunked_seq
 
+from ._util import FileReader
 
 # If data is in Google Cloud Storage, `pyarrow.fs.GcsFileSystem` accepts "access_token"
 # and "credential_token_expiration". These can be obtained via

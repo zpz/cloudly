@@ -1,26 +1,17 @@
 from __future__ import annotations
 
-import io
-import itertools
 import logging
 from abc import abstractmethod
-from collections.abc import Iterable, Iterator, Sequence
-from multiprocessing.util import Finalize
+from collections.abc import Iterator
 from typing import TypeVar
 
-import pyarrow
-from pyarrow.fs import FileSystem, GcsFileSystem
-from pyarrow.parquet import FileMetaData, ParquetFile
-
-from cloudly.upathlib import LocalUpath, PathType, Serializer, Upath, resolve_path
+from cloudly.upathlib import Upath
 
 try:
     from cloudly.gcp.auth import get_credentials
 except ImportError:
     pass
-from cloudly.util.seq import Element, Seq, locate_idx_in_chunked_seq
-
-
+from cloudly.util.seq import Element, Seq
 
 logger = logging.getLogger(__name__)
 

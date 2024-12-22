@@ -34,9 +34,9 @@ __all__ = [
 
 from pathlib import Path
 
+from . import serializer
 from ._blob import BlobUpath
 from ._local import LocalPathType, LocalUpath
-from . import serializer
 from ._upath import FileInfo, LockAcquireError, LockReleaseError, PathType, Upath
 
 

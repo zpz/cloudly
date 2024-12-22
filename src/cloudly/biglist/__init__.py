@@ -45,6 +45,7 @@ __all__ = [
 ]
 
 
+from . import parquet
 from ._biglist import (
     Biglist,
     BiglistFileReader,
@@ -53,4 +54,3 @@ from ._parquet_biglist import (
     ParquetBiglist,
     ParquetFileReader,
 )
-from . import parquet
