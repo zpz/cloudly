@@ -21,8 +21,8 @@ from cloudly.upathlib import PathType, Upath, resolve_path
 from cloudly.upathlib.serializer import (
     JsonSerializer,
     PickleSerializer,
-    ZstdPickleSerializer,
     Serializer,
+    ZstdPickleSerializer,
 )
 from cloudly.util.seq import Element
 
