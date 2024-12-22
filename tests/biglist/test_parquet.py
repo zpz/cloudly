@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pyarrow
 
-from cloudly.biglist._util import (
+from cloudly.biglist.parquet import (
     ParquetBatchData,
     ParquetFileReader,
     make_parquet_schema,

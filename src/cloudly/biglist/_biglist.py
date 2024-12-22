@@ -17,11 +17,12 @@ from uuid import uuid4
 
 from typing_extensions import Self
 
-from cloudly.upathlib import PathType, Serializer, Upath, resolve_path
+from cloudly.upathlib import PathType, Upath, resolve_path
 from cloudly.upathlib.serializer import (
     JsonSerializer,
     PickleSerializer,
     ZstdPickleSerializer,
+    Serializer,
 )
 from cloudly.util.seq import Element
 
@@ -29,6 +30,8 @@ from ._base import BiglistBase, _biglist_objs
 from ._util import (
     FileReader,
     FileSeq,
+)
+from .parquet import (
     ParquetSerializer,
     make_parquet_schema,
 )

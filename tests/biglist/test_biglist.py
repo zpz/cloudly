@@ -25,7 +25,7 @@ from cloudly.biglist import (
     Biglist,
     ParquetBiglist,
 )
-from cloudly.biglist._util import (
+from cloudly.biglist.parquet import (
     ParquetSerializer,
     read_parquet_file,
     write_arrays_to_parquet,

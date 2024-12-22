@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.2.2] - 2024-12-22
+
+- Re-arrangements of file org and import paths related to `biglist`, `upathlib`, `serializer`, `parquet`.
+
+
 ## [0.2.1] - 2024-12-21
 
 - Some cleanup and file re-arrangements.

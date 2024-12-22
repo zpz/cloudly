@@ -409,7 +409,7 @@ Let's create a couple small Parquet files to demonstrate this API.
 
 >>> from cloudly.upathlib import LocalUpath
 >>> import random
->>> from cloudly.biglist._util import write_arrays_to_parquet
+>>> from cloudly.biglist.parquet import write_arrays_to_parquet
 >>>
 >>> path = LocalUpath('/tmp/a/b/c/e')
 >>> path.rmrf()
@@ -806,7 +806,7 @@ as demonstrated above, are ready for use:
 >>> [v.path for v in car_data.files]
 [LocalUpath('/tmp/a/b/c/e/ford.parquet'), LocalUpath('/tmp/a/b/c/e/honda.parquet')]
 >>>
->>> from cloudly.biglist._util import read_parquet_file
+>>> from cloudly.biglist.parquet import read_parquet_file
 >>> ff = read_parquet_file(car_data.files[1].path)
 >>> ff
 <ParquetFileReader for '/tmp/a/b/c/e/honda.parquet'>
@@ -843,7 +843,7 @@ Writing Parquet files
 The function :func:`write_arrays_to_parquet` is provided to write data columns to a single Parquet file.
 
 >>> from uuid import uuid4
->>> from cloudly.biglist._util import write_arrays_to_parquet, read_parquet_file
+>>> from cloudly.biglist.parquet import write_arrays_to_parquet, read_parquet_file
 >>> import random
 >>> from cloudly.upathlib import LocalUpath
 >>> N = 10000
@@ -875,7 +875,7 @@ required group field_id=-1 schema {
 
 Similarly, :func:`write_pylist_to_parquet` writes data rows to a Parquet file:
 
->>> from cloudly.biglist._util import write_pylist_to_parquet
+>>> from cloudly.biglist.parquet import write_pylist_to_parquet
 >>> data = [{'name': str(uuid4()), 'age': random.randint(1, 100), 'income': {'employer': str(uuid4()), 'amount': random.randint(10000, 100000)}} for _ in range(100)]
 >>> f = LocalUpath('/tmp/test/data.parquet')
 >>> f.rmrf()  # doctest: +SKIP
@@ -900,7 +900,7 @@ API reference
    :exclude-members: __init__
 
 
-.. autoclass:: cloudly.biglist._util.FileReader
+.. autoclass:: cloudly.biglist.FileReader
 
 
 .. autoclass:: cloudly.util.seq.Slicer

@@ -42,6 +42,8 @@ __all__ = [
     'ParquetBiglist',
     'ParquetFileReader',
     'parquet',
+    'FileReader',
+    'Chain', 'Slicer',
 ]
 
 
@@ -54,3 +56,5 @@ from ._parquet_biglist import (
     ParquetBiglist,
     ParquetFileReader,
 )
+from ._util import FileReader
+from cloudly.util.seq import Chain, Slicer

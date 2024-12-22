@@ -1,5 +1,17 @@
 from __future__ import annotations
 
+__all__ = [
+    'ParquetFileReader',
+    'ParquetBatchData',
+    'read_parquet_file',
+    'make_parquet_field',
+    'make_parquet_type',
+    'make_parquet_schema',
+    'write_arrays_to_parquet',
+    'write_pylist_to_parquet',
+]
+
+
 import io
 import itertools
 import logging
@@ -10,8 +22,8 @@ import pyarrow
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 
-from cloudly.upathlib import LocalUpath, PathType, Serializer, Upath, resolve_path
-
+from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path
+from cloudly.upathlib.serializer import Serializer
 try:
     from cloudly.gcp.auth import get_credentials
 except ImportError:

@@ -5,7 +5,8 @@ from collections.abc import Iterable, Sequence, Sized
 import pytest
 
 from cloudly.biglist._biglist import BiglistBase
-from cloudly.biglist._util import FileReader, FileSeq, ParquetBatchData
+from cloudly.biglist._util import FileReader, FileSeq
+from cloudly.biglist.parquet import ParquetBatchData
 from cloudly.util.seq import (
     Chain,
     Seq,
