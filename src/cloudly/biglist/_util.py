@@ -6,11 +6,6 @@ from collections.abc import Iterator
 from typing import TypeVar
 
 from cloudly.upathlib import Upath
-
-try:
-    from cloudly.gcp.auth import get_credentials
-except ImportError:
-    pass
 from cloudly.util.seq import Element, Seq
 
 logger = logging.getLogger(__name__)

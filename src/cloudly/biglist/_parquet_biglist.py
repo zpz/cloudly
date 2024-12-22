@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Sequence
+import logging
 
 from cloudly.upathlib import PathType, Upath, resolve_path
 
@@ -12,6 +13,9 @@ from ._util import (
 from .parquet import (
     ParquetFileReader,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class ParquetBiglist(BiglistBase):
