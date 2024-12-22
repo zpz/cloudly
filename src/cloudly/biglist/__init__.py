@@ -36,19 +36,27 @@ as well as "chaining up" a series of biglists. These utilities work not only for
 but also for any :class:`Seq`.
 """
 
-from __future__ import annotations
-
 __all__ = [
     'Biglist',
     'BiglistFileReader',
     'ParquetBiglist',
     'ParquetFileReader',
+    'parquet',
+    'FileReader',
+    'Chain',
+    'Slicer',
 ]
 
 
+from cloudly.util.seq import Chain, Slicer
+
+from . import parquet
 from ._biglist import (
     Biglist,
     BiglistFileReader,
+)
+from ._parquet_biglist import (
     ParquetBiglist,
     ParquetFileReader,
 )
+from ._util import FileReader

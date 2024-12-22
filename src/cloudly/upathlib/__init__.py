@@ -28,15 +28,15 @@ __all__ = [
     'FileInfo',
     'LockAcquireError',
     'LockReleaseError',
-    'Serializer',
+    'serializer',
 ]
 
 
 from pathlib import Path
 
+from . import serializer
 from ._blob import BlobUpath
 from ._local import LocalPathType, LocalUpath
-from ._serializer import Serializer
 from ._upath import FileInfo, LockAcquireError, LockReleaseError, PathType, Upath
 
 
