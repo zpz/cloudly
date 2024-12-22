@@ -5,7 +5,6 @@ __all__ = ['Seq', 'Slicer', 'Chain']
 
 import bisect
 import itertools
-from abc import abstractmethod
 from collections.abc import Iterator, Sequence
 from typing import Protocol, TypeVar, runtime_checkable
 
@@ -325,4 +324,3 @@ class Chain(Seq[Element]):
         object.
         """
         return self._lists
-

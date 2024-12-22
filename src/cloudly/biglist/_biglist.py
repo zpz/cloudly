@@ -17,11 +17,22 @@ from uuid import uuid4
 
 from typing_extensions import Self
 
+from cloudly.upathlib import PathType, Serializer, Upath, resolve_path
+from cloudly.upathlib._serializer import (
+    JsonSerializer,
+    PickleSerializer,
+    ZstdPickleSerializer,
+)
 from cloudly.util.seq import Element
-from cloudly.upathlib import PathType, Upath, resolve_path, Serializer
-from cloudly.upathlib._serializer import JsonSerializer, PickleSerializer, ZstdPickleSerializer
-from ._util import FileReader, ParquetFileReader, ParquetSerializer, make_parquet_schema, FileSeq
+
 from ._base import BiglistBase, _biglist_objs, get_global_thread_pool
+from ._util import (
+    FileReader,
+    FileSeq,
+    ParquetFileReader,
+    ParquetSerializer,
+    make_parquet_schema,
+)
 
 logger = logging.getLogger(__name__)
 

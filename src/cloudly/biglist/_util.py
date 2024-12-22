@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-import bisect
-import itertools
-from abc import abstractmethod
-from collections.abc import Iterator, Sequence
-from typing import Protocol, TypeVar, runtime_checkable
 import io
 import itertools
 import logging
+from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
 from multiprocessing.util import Finalize
+from typing import TypeVar
 
 import pyarrow
 from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 
-from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path, Serializer
+from cloudly.upathlib import LocalUpath, PathType, Serializer, Upath, resolve_path
+
 try:
     from cloudly.gcp.auth import get_credentials
 except ImportError:
@@ -40,7 +38,6 @@ from cloudly.util.seq import Element, Seq, locate_idx_in_chunked_seq
 
 
 logger = logging.getLogger(__name__)
-
 
 
 class FileReader(Seq[Element]):
@@ -91,7 +88,6 @@ class FileReader(Seq[Element]):
         they may take advantage of the in-memory data if this method *has been called*.).
         """
         raise NotImplementedError
-
 
 
 class ParquetFileReader(FileReader):

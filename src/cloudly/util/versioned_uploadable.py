@@ -19,7 +19,9 @@
 from __future__ import annotations
 
 __all__ = [
-    'VersionExistsError', 'VersionNotFoundError', 'VersionedUploadable',
+    'VersionExistsError',
+    'VersionNotFoundError',
+    'VersionedUploadable',
 ]
 
 

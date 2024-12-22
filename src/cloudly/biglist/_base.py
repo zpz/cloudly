@@ -12,12 +12,11 @@ import uuid
 import weakref
 from abc import abstractmethod
 from collections.abc import Iterator
-from typing import TypeVar
-from collections.abc import Sequence
 
 from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path
+from cloudly.util.seq import Element, Seq
+
 from ._util import FileReader
-from cloudly.util.seq import Seq, Element
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +81,6 @@ if hasattr(os, 'register_at_fork'):  # this is not available on Windows
         _global_thread_pool_lock_ = threading.Lock()
 
     os.register_at_fork(after_in_child=_clear_global_state)
-
-
 
 
 class BiglistBase(Seq[Element]):

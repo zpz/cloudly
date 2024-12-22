@@ -5,13 +5,13 @@ from collections.abc import Iterable, Sequence, Sized
 import pytest
 
 from cloudly.biglist._biglist import BiglistBase
+from cloudly.biglist._util import FileReader, FileSeq, ParquetBatchData
 from cloudly.util.seq import (
     Chain,
     Seq,
     Slicer,
     locate_idx_in_chunked_seq,
 )
-from cloudly.biglist._util import ParquetBatchData, FileReader, FileSeq
 
 
 def test_locate_idx_in_chunked_seq():

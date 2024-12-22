@@ -25,13 +25,13 @@ from cloudly.biglist import (
     Biglist,
     ParquetBiglist,
 )
-from cloudly.util.seq import Slicer
-from cloudly.upathlib import LocalUpath
 from cloudly.biglist._util import (
     ParquetSerializer,
     read_parquet_file,
     write_arrays_to_parquet,
 )
+from cloudly.upathlib import LocalUpath
+from cloudly.util.seq import Slicer
 
 
 def test_custom_file_name():

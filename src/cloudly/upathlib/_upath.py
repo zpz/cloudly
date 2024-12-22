@@ -41,7 +41,6 @@ from ._serializer import (
     PickleSerializer,
     ZstdPickleSerializer,
 )
-
 from ._util import MAX_THREADS, get_shared_thread_pool
 
 # End user may want to do this:

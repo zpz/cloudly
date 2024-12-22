@@ -36,8 +36,8 @@ from pathlib import Path
 
 from ._blob import BlobUpath
 from ._local import LocalPathType, LocalUpath
-from ._upath import FileInfo, LockAcquireError, LockReleaseError, PathType, Upath
 from ._serializer import Serializer
+from ._upath import FileInfo, LockAcquireError, LockReleaseError, PathType, Upath
 
 
 def resolve_path(path: PathType) -> Upath:

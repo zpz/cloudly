@@ -39,7 +39,10 @@ but also for any :class:`Seq`.
 from __future__ import annotations
 
 __all__ = [
-    'Biglist', 'BiglistFileReader', 'ParquetBiglist', 'ParquetFileReader',
+    'Biglist',
+    'BiglistFileReader',
+    'ParquetBiglist',
+    'ParquetFileReader',
 ]
 
 
