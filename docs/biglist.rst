@@ -159,7 +159,7 @@ We can access any element of a :class:`Biglist` like we do a list:
 Biglist does not support slicing directly.
 However, the class :class:`Slicer` wraps a :class:`Seq` and enables element access by a single index, by a slice, or by a list of indices:
 
->>> from cloudly.biglist import Slicer
+>>> from cloudly.util.seq import Slicer
 >>> v = Slicer(mylist)
 >>> len(v)
 10023
@@ -409,7 +409,7 @@ Let's create a couple small Parquet files to demonstrate this API.
 
 >>> from cloudly.upathlib import LocalUpath
 >>> import random
->>> from cloudly.util.parquet import write_arrays_to_parquet
+>>> from cloudly.biglist._util import write_arrays_to_parquet
 >>>
 >>> path = LocalUpath('/tmp/a/b/c/e')
 >>> path.rmrf()
@@ -768,7 +768,7 @@ Chain
 :class:`Chain` takes a series of :class:`Seq`\s and returns a combined Seq without data copy.
 For example,
 
->>> from cloudly.biglist import Chain
+>>> from cloudly.util.seq import Chain
 >>> numbers = list(range(10))
 >>> car_data  # doctest: +SKIP
 <ParquetBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
@@ -806,7 +806,7 @@ as demonstrated above, are ready for use:
 >>> [v.path for v in car_data.files]
 [LocalUpath('/tmp/a/b/c/e/ford.parquet'), LocalUpath('/tmp/a/b/c/e/honda.parquet')]
 >>>
->>> from cloudly.util.parquet import read_parquet_file
+>>> from cloudly.biglist._util import read_parquet_file
 >>> ff = read_parquet_file(car_data.files[1].path)
 >>> ff
 <ParquetFileReader for '/tmp/a/b/c/e/honda.parquet'>
@@ -843,7 +843,7 @@ Writing Parquet files
 The function :func:`write_arrays_to_parquet` is provided to write data columns to a single Parquet file.
 
 >>> from uuid import uuid4
->>> from cloudly.util.parquet import write_arrays_to_parquet, read_parquet_file
+>>> from cloudly.biglist._util import write_arrays_to_parquet, read_parquet_file
 >>> import random
 >>> from cloudly.upathlib import LocalUpath
 >>> N = 10000
@@ -875,7 +875,7 @@ required group field_id=-1 schema {
 
 Similarly, :func:`write_pylist_to_parquet` writes data rows to a Parquet file:
 
->>> from cloudly.util.parquet import write_pylist_to_parquet
+>>> from cloudly.biglist._util import write_pylist_to_parquet
 >>> data = [{'name': str(uuid4()), 'age': random.randint(1, 100), 'income': {'employer': str(uuid4()), 'amount': random.randint(10000, 100000)}} for _ in range(100)]
 >>> f = LocalUpath('/tmp/test/data.parquet')
 >>> f.rmrf()  # doctest: +SKIP
@@ -893,20 +893,20 @@ API reference
 =============
 
 
-.. autodata:: cloudly.util._util.Element
+.. autodata:: cloudly.util.seq.Element
 
 
-.. autoclass:: cloudly.util._util.Seq
+.. autoclass:: cloudly.util.seq.Seq
    :exclude-members: __init__
 
 
-.. autoclass:: cloudly.util._util.FileReader
+.. autoclass:: cloudly.biglist._util.FileReader
 
 
-.. autoclass:: cloudly.biglist.Slicer
+.. autoclass:: cloudly.util.seq.Slicer
 
 
-.. autoclass:: cloudly.biglist.Chain
+.. autoclass:: cloudly.util.seq.Chain
 
 
 .. autoclass:: cloudly.biglist._base.BiglistBase

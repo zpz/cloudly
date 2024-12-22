@@ -3,6 +3,8 @@
 i.e. each control parameter is consumed by exactly one worker.
 """
 
+__all__ = ['Multiplexer']
+
 import base64
 import logging
 import multiprocessing
@@ -14,7 +16,8 @@ from typing import TypeVar
 
 from cloudly.upathlib import PathType, Upath
 
-from .versioned_uploadable import make_version, utcnow
+from .datetime import utcnow
+from .versioned_uploadable import make_version
 
 logger = logging.getLogger(__name__)
 

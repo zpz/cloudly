@@ -3,8 +3,7 @@ from types import SimpleNamespace
 
 import pyarrow
 
-from cloudly.upathlib import LocalUpath
-from cloudly.util.parquet import (
+from cloudly.biglist._util import (
     ParquetBatchData,
     ParquetFileReader,
     make_parquet_schema,
@@ -12,6 +11,7 @@ from cloudly.util.parquet import (
     read_parquet_file,
     write_pylist_to_parquet,
 )
+from cloudly.upathlib import LocalUpath
 
 
 def test_idx_locator():

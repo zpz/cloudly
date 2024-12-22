@@ -28,18 +28,6 @@ from google.cloud.storage.retry import (
 from typing_extensions import Self
 
 from cloudly.gcp.auth import get_credentials, get_project_id
-
-# Many blob methods have a parameter `timeout`.
-# The default value, 60 seconds, is defined as ``google.cloud.storage.constants._DEFAULT_TIMEOUT``.
-# From my reading, this is the `timeout` parameter to `google.cloud.storage.client._connection.api_request`,
-# that is, the `timeout` parameter to `google.cloud._http.JSONConnection.api_request`.
-# In other words, this is the http request "connection timeout" to server.
-# It is not a "retry" timeout.
-# `google.cloud` is the repo python-cloud-core.
-# `DEFAULT_RETRY` is used in `google.cloud.storage` extensively.
-# If you want to increase the timeout (default to 120) across the board,
-# you may hack certain attributes of this object.
-# See `google.api_core.retry.exponential_sleep_generator`.
 from cloudly.upathlib import (
     BlobUpath,
     FileInfo,
@@ -55,6 +43,19 @@ from cloudly.upathlib._util import MAX_THREADS, get_shared_thread_pool
 # To see retry info, add the following in user code.
 # There is one message per retry.
 # logging.getLogger('google.api_core.retry').setLevel(logging.DEBUG)
+
+
+# Many blob methods have a parameter `timeout`.
+# The default value, 60 seconds, is defined as ``google.cloud.storage.constants._DEFAULT_TIMEOUT``.
+# From my reading, this is the `timeout` parameter to `google.cloud.storage.client._connection.api_request`,
+# that is, the `timeout` parameter to `google.cloud._http.JSONConnection.api_request`.
+# In other words, this is the http request "connection timeout" to server.
+# It is not a "retry" timeout.
+# `google.cloud` is the repo python-cloud-core.
+# `DEFAULT_RETRY` is used in `google.cloud.storage` extensively.
+# If you want to increase the timeout (default to 120) across the board,
+# you may hack certain attributes of this object.
+# See `google.api_core.retry.exponential_sleep_generator`.
 
 
 logger = logging.getLogger(__name__)

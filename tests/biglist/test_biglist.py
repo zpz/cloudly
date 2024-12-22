@@ -24,14 +24,14 @@ from boltons import iterutils
 from cloudly.biglist import (
     Biglist,
     ParquetBiglist,
-    Slicer,
 )
-from cloudly.upathlib import LocalUpath
-from cloudly.util.parquet import (
+from cloudly.biglist._util import (
     ParquetSerializer,
     read_parquet_file,
     write_arrays_to_parquet,
 )
+from cloudly.upathlib import LocalUpath
+from cloudly.util.seq import Slicer
 
 
 def test_custom_file_name():

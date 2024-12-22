@@ -36,12 +36,11 @@ from typing import (
 from tqdm.auto import tqdm
 from typing_extensions import Self
 
-from cloudly.util.serializer import (
+from ._serializer import (
     JsonSerializer,
     PickleSerializer,
     ZstdPickleSerializer,
 )
-
 from ._util import MAX_THREADS, get_shared_thread_pool
 
 # End user may want to do this:

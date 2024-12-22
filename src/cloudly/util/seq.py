@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+__all__ = ['Seq', 'Slicer', 'Chain']
+
+
 import bisect
 import itertools
-from abc import abstractmethod
 from collections.abc import Iterator, Sequence
 from typing import Protocol, TypeVar, runtime_checkable
 
@@ -98,7 +100,7 @@ class Seq(Protocol[Element]):
     In particular, ``Sequence`` implements this protocol, hence is considered a subclass
     of ``Seq`` for type checking purposes:
 
-    >>> from cloudly.util._util import Seq
+    >>> from cloudly.util.seq import Seq
     >>> from collections.abc import Sequence
     >>> issubclass(Sequence, Seq)
     True
@@ -322,53 +324,3 @@ class Chain(Seq[Element]):
         object.
         """
         return self._lists
-
-
-class FileReader(Seq[Element]):
-    """
-    A ``FileReader`` is a "lazy" loader of a data file.
-    It keeps track of the path of a data file along with a loader function,
-    but performs the loading only when needed.
-    In particular, upon initiation of a ``FileReader`` object,
-    file loading has not happened, and the object
-    is light weight and friendly to pickling.
-
-    Once data have been loaded, this class provides various ways to navigate
-    the data. At a minimum, the :class:`Seq` API is implemented.
-
-    With loaded data and associated facilities, this object may no longer
-    be pickle-able, depending on the specifics of a subclass.
-
-    One use case of this class is to pass around ``FileReader`` objects
-    (that are initiated but not loaded) in
-    `multiprocessing <https://docs.python.org/3/library/multiprocessing.html>`_ code for concurrent data processing.
-
-    This class is generic with a parameter indicating the type of the elements in the data sequence
-    contained in the file. For example you can write::
-
-        def func(file_reader: FileReader[int]):
-            ...
-    """
-
-    def __repr__(self):
-        return f"<{self.__class__.__name__} for '{self.path}'>"
-
-    def __str__(self):
-        return self.__repr__()
-
-    @abstractmethod
-    def load(self) -> None:
-        """
-        This method *eagerly* loads all the data from the file into memory.
-
-        Once this method has been called, subsequent data consumption should
-        all draw upon this in-memory copy. However, if the data file is large,
-        and especially if only part of the data is of interest, calling this method
-        may not be the best approach. This all depends on the specifics of the subclass.
-
-        A subclass may allow consuming the data and load parts of data
-        in a "as-needed" or "streaming" fashion. In that approach, :meth:`__getitem__`
-        and :meth:`__iter__` do not require this method to be called (although
-        they may take advantage of the in-memory data if this method *has been called*.).
-        """
-        raise NotImplementedError
