@@ -16,7 +16,7 @@ from collections.abc import Iterator
 from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path
 from cloudly.util.seq import Element, Seq
 
-from ._util import FileReader
+from ._util import FileReader, FileSeq
 
 logger = logging.getLogger(__name__)
 
