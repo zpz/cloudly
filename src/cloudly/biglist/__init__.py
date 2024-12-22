@@ -41,8 +41,8 @@ __all__ = [
     'BiglistFileReader',
     'ParquetBiglist',
     'ParquetFileReader',
-    'parquet',
     'FileReader',
+    'parquet',
     'Chain',
     'Slicer',
 ]
