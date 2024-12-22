@@ -12,8 +12,8 @@ Local file system is implemented by :class:`LocalUpath`, which subclasses Upath.
 Client for Google Cloud Storage (i.e. blob store on GCP) is implemented by another Upath subclass,
 namely :class:`~cloudly.upathlib.GcsBlobUpath`.
 
-One use case is the package `biglist <https://biglist.readthedocs.io/en/latest/>`__,
-where the class `Biglist <https://biglist.readthedocs.io/en/latest/#biglist.Biglist>`__ takes a `Upath` object to indicate its location of storage.
+One use case is the module `cloudly.biglist`,
+where the class `Biglist` takes a `Upath` object to indicate its location of storage.
 It does not care whether the storage is local or in a cloud blob store---it
 simply uses the common API to operate the storage.
 """
@@ -28,6 +28,7 @@ __all__ = [
     'FileInfo',
     'LockAcquireError',
     'LockReleaseError',
+    'Serializer',
 ]
 
 
@@ -36,6 +37,7 @@ from pathlib import Path
 from ._blob import BlobUpath
 from ._local import LocalPathType, LocalUpath
 from ._upath import FileInfo, LockAcquireError, LockReleaseError, PathType, Upath
+from ._serializer import Serializer
 
 
 def resolve_path(path: PathType) -> Upath:

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pyarrow
 
 from cloudly.upathlib import LocalUpath
-from cloudly.util.parquet import (
+from cloudly.biglist._util import (
     ParquetBatchData,
     ParquetFileReader,
     make_parquet_schema,

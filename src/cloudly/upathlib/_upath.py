@@ -36,7 +36,7 @@ from typing import (
 from tqdm.auto import tqdm
 from typing_extensions import Self
 
-from cloudly.util.serializer import (
+from ._serializer import (
     JsonSerializer,
     PickleSerializer,
     ZstdPickleSerializer,

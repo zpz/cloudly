@@ -4,15 +4,14 @@ from collections.abc import Iterable, Sequence, Sized
 
 import pytest
 
-from cloudly.biglist._biglist import BiglistBase, FileSeq
-from cloudly.util._util import (
+from cloudly.biglist._biglist import BiglistBase
+from cloudly.util.seq import (
     Chain,
-    FileReader,
     Seq,
     Slicer,
     locate_idx_in_chunked_seq,
 )
-from cloudly.util.parquet import ParquetBatchData
+from cloudly.biglist._util import ParquetBatchData, FileReader, FileSeq
 
 
 def test_locate_idx_in_chunked_seq():

@@ -6,7 +6,7 @@ import pytest
 
 import cloudly.upathlib._tests as alltests
 from cloudly.upathlib import LocalUpath
-from cloudly.util import serializer
+from cloudly.upathlib._serializer import Lz4PickleSerializer
 
 
 @pytest.fixture
@@ -86,5 +86,5 @@ def test_pickle(test_path):
     pp.write_json(data, overwrite=True)
     assert pp.read_json() == data
 
-    serializer.Lz4PickleSerializer.dump(data, pp, overwrite=True)
-    assert serializer.Lz4PickleSerializer.load(pp) == data
+    Lz4PickleSerializer.dump(data, pp, overwrite=True)
+    assert Lz4PickleSerializer.load(pp) == data

@@ -17,25 +17,20 @@ from uuid import uuid4
 
 from typing_extensions import Self
 
-from cloudly.upathlib import PathType, Upath, resolve_path
-from cloudly.util import serializer
-from cloudly.util._util import Element, FileReader
-from cloudly.util.parquet import (
-    ParquetFileReader,
-    ParquetSerializer,
-    make_parquet_schema,
-)
-
-from ._base import BiglistBase, FileSeq, _biglist_objs, get_global_thread_pool
+from cloudly.util.seq import Element
+from cloudly.upathlib import PathType, Upath, resolve_path, Serializer
+from cloudly.upathlib._serializer import JsonSerializer, PickleSerializer, ZstdPickleSerializer
+from ._util import FileReader, ParquetFileReader, ParquetSerializer, make_parquet_schema, FileSeq
+from ._base import BiglistBase, _biglist_objs, get_global_thread_pool
 
 logger = logging.getLogger(__name__)
 
 
 class Biglist(BiglistBase[Element]):
     registered_storage_formats = {
-        'json': serializer.JsonSerializer,
-        'pickle': serializer.PickleSerializer,
-        'pickle-zstd': serializer.ZstdPickleSerializer,
+        'json': JsonSerializer,
+        'pickle': PickleSerializer,
+        'pickle-zstd': ZstdPickleSerializer,
     }
 
     DEFAULT_STORAGE_FORMAT = 'pickle-zstd'
@@ -44,7 +39,7 @@ class Biglist(BiglistBase[Element]):
     def register_storage_format(
         cls,
         name: str,
-        serializer: type[serializer.Serializer],
+        serializer: type[Serializer],
     ) -> None:
         """
         Register a new serializer to handle data file dumping and loading.
@@ -144,7 +139,7 @@ class Biglist(BiglistBase[Element]):
 
             ``serialize_kwargs`` and ``deserialize_kwargs`` are rarely needed.
             One use case is ``schema`` when storage format is "parquet".
-            See :class:`~cloudly.util.parquet.ParquetSerializer`.
+            See :class:`~cloudly.biglist._util.ParquetSerializer`.
 
             ``serialize_kwargs`` and ``deserialize_kwargs``, if not ``None``,
             will be saved in the "info.json" file, hence they must be JSON
@@ -796,7 +791,7 @@ class BiglistFileReader(FileReader[Element]):
         loader
             A function that will be used to load the data file.
             This must be pickle-able.
-            Usually this is the bound method ``load`` of  a subclass of :class:`cloudly.util.serializer.Serializer`.
+            Usually this is the bound method ``load`` of  a subclass of :class:`cloudly.upathlib.Serializer`.
             If you customize this, please see the doc of :class:`~biglist.FileReader`.
         """
         super().__init__()
