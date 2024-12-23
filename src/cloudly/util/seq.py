@@ -133,8 +133,10 @@ class Seq(Protocol[Element]):
 
 class Slicer(Seq[Element]):
     """
-    This class wraps a :class:`Seq` and enables element access by slice or index array,
-    in addition to single integer.
+    The class :class:`Slicer` takes any :class:`Seq` and provides :meth:`~Slicer.__getitem__` that accepts
+    a single index, or a slice, or a list of indices. A single-index access will return
+    the requested element; the other two scenarios return a new Slicer via a zero-copy operation.
+    To get all the elements out of a Slicer, either iterate it or call its method :meth:`~Slicer.collect`.
 
     A ``Slicer`` object makes "zero-copy"---it holds a reference to the underlying ``Seq``
     and keeps track of indices of the selected elements.
@@ -264,6 +266,23 @@ class Chain(Seq[Element]):
     This class tracks a series of :class:`Seq` objects to provide
     random element access and iteration on the series as a whole,
     with zero-copy.
+
+    Example ::
+
+        >>> from cloudly.util.seq import Chain
+        >>> numbers = list(range(10))
+        >>> car_data  # doctest: +SKIP
+        <ParquetBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
+        >>> combined = Chain(numbers, car_data)
+        >>> combined[3]
+        3
+        >>> combined[9]
+        9
+        >>> combined[10]
+        {'make': 'ford', 'year': 1960, 'sales': 234}
+        >>>
+        >>> car_data[0]
+        {'make': 'ford', 'year': 1960, 'sales': 234}
 
     This class is in contrast with the standard `itertools.chain <https://docs.python.org/3/library/itertools.html#itertools.chain>`_,
     which takes iterables.

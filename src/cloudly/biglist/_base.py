@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import atexit
 import bisect
 import concurrent.futures
 import logging
@@ -19,35 +18,6 @@ from cloudly.util.seq import Element, Seq
 from ._util import FileReader, FileSeq
 
 logger = logging.getLogger(__name__)
-
-
-_biglist_objs = weakref.WeakSet()
-
-
-# TODO: rethink this.
-def _cleanup():
-    # Use this to guarantee proper execution of ``Biglist.__del__``.
-    # An error case was observed in this scenario:
-    #
-    #   1. The ``self.path.rmrf()`` line executes;
-    #   2. ``rmrf`` involves a background thread, in which task is submitted to a thread pool;
-    #   3. ``RuntimeError: cannot schedule new futures after interpreter shutdown`` was raised.
-    #
-    # The module ``concurrent.futures.thread`` registers a ``atexit`` function, which sets a flag
-    # saying "interpreter is shutdown". This module contains the ``ThreadPoolExecutor`` class and
-    # of course its ``submit`` method. In ``submit``, if it sees the global "interpreter is shutdown"
-    # flag is set, it raises the error above.
-    #
-    # Here, we register this function with ``atexit`` **after** the registration of the cleanup
-    # function in the standard module, because at this time that standard module has been imported.
-    # As a result, this cleanup function runs before the standard one, hence the call to ``rmrf``
-    # finishes before the "interpreter is shutdown" is set.
-    global _biglist_objs
-    for x in _biglist_objs:
-        x.__del__()
-
-
-atexit.register(_cleanup)
 
 
 _global_thread_pool_ = weakref.WeakValueDictionary()

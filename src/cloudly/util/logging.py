@@ -1,5 +1,5 @@
 """
-Configure logging, mainly the format.
+Configure logging.
 
 A call to the function ``config_logger`` in a launching script
 is all that is needed to set up the logging format.

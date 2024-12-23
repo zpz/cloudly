@@ -26,7 +26,7 @@ from cloudly.upathlib.serializer import (
 )
 from cloudly.util.seq import Element
 
-from ._base import BiglistBase, _biglist_objs
+from ._base import BiglistBase
 from ._util import (
     FileReader,
     FileSeq,
@@ -239,8 +239,6 @@ class Biglist(BiglistBase[Element]):
             del kk['schema_spec']
             self._serialize_kwargs = kk
 
-        _biglist_objs.add(self)
-
         # For back compat.
         if self.info.get('storage_version', 0) < 3:
             # This is not called by ``new``, instead is opening an existing dataset.
@@ -248,7 +246,7 @@ class Biglist(BiglistBase[Element]):
             # not append more data to them. If you do, the back-compat code below
             # may not be totally reliable if the dataset is being used by multiple workers
             # concurrently.
-            if 'data_files_info' not in self.info:  # added in 0.7.4
+            if 'data_files_info' not in self.info:  # added in 0.7.4 (`biglist` version)
                 if self.storage_version == 0:
                     # This may not be totally reliable in every scenario.
                     # The older version had a parameter `lazy`, which is gone now.
@@ -307,7 +305,7 @@ class Biglist(BiglistBase[Element]):
                     ff.write_json(self.info, overwrite=True)
 
             else:
-                # Added in 0.7.5: check for a bug introduced in 0.7.4.
+                # Added in 0.7.5: check for a bug introduced in 0.7.4. (`biglist` versions)
                 # Convert full path to file name.
                 # Version 0.7.4 was used very briefly, hence very few datasets
                 # were created by that version.
