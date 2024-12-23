@@ -126,16 +126,16 @@ class GcsBlobUpath(BlobUpath):
 
         Examples
         --------
-        These several calls are equivalent:
-
-        >>> GcsBlobUpath('experiments', 'data', 'first.data', bucket_name='backup')
-        GcsBlobUpath('gs://backup/experiments/data/first.data')
-        >>> GcsBlobUpath('/experiments/data/first.data', bucket_name='backup')
-        GcsBlobUpath('gs://backup/experiments/data/first.data')
-        >>> GcsBlobUpath('gs://backup/experiments/data/first.data')
-        GcsBlobUpath('gs://backup/experiments/data/first.data')
-        >>> GcsBlobUpath('gs://backup', 'experiments', 'data/first.data')
-        GcsBlobUpath('gs://backup/experiments/data/first.data')
+        These several calls are equivalent::
+        
+            >>> GcsBlobUpath('experiments', 'data', 'first.data', bucket_name='backup')
+            GcsBlobUpath('gs://backup/experiments/data/first.data')
+            >>> GcsBlobUpath('/experiments/data/first.data', bucket_name='backup')
+            GcsBlobUpath('gs://backup/experiments/data/first.data')
+            >>> GcsBlobUpath('gs://backup/experiments/data/first.data')
+            GcsBlobUpath('gs://backup/experiments/data/first.data')
+            >>> GcsBlobUpath('gs://backup', 'experiments', 'data/first.data')
+            GcsBlobUpath('gs://backup/experiments/data/first.data')
         """
         if bucket_name is None:
             # The first arg must be like

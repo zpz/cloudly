@@ -16,19 +16,20 @@ To install, do::
 
    $ python3 -m pip install cloudly
 
-for with optional dependencies, such as
+or with optional dependencies, such as
 
    $ python3 -m pip install cloudly[gcp]
 
 
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
-   gcp
-   biglist
-   upathlib
-   util
+   biglist/index
+   upathlib/index
+   gcp/index
+   azure/index
+   util/index
 
 
 Indices and tables
