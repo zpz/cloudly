@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import atexit
 import bisect
 import concurrent.futures
 import logging

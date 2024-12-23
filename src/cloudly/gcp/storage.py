@@ -127,7 +127,7 @@ class GcsBlobUpath(BlobUpath):
         Examples
         --------
         These several calls are equivalent::
-        
+
             >>> GcsBlobUpath('experiments', 'data', 'first.data', bucket_name='backup')
             GcsBlobUpath('gs://backup/experiments/data/first.data')
             >>> GcsBlobUpath('/experiments/data/first.data', bucket_name='backup')
