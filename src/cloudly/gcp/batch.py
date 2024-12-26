@@ -27,7 +27,6 @@ class JobConfig:
         `network_uri` could be like this: 'projects/shared-vpc-admin/global/networks/vpcnet...'.
         `subnet_uri` could be like this: 'https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01'
         """
-        instances_policy_template = None
         network = batch_v1.AllocationPolicy.NetworkInterface(
             network=network_uri,
             subnetwork=subnet_uri,
@@ -36,12 +35,15 @@ class JobConfig:
         provision = getattr(
             batch_v1.AllocationPolicy.ProvisioningModel, provisioning_model.upper()
         )
+        instance_policy = batch_v1.AllocationPolicy.InstancePolicy(
+            provisioning_model=provision,
+        )
 
         return batch_v1.AllocationPolicy(
             location=batch_v1.AllocationPolicy.LocationPolicy(
                 allowed_locations=[f'regions/{region}'],
             ),
-            instances=[instances_policy_template],
+            instances=[instance_policy],
             labels=labels,
             network=batch_v1.AllocationPolicy.NetworkPolicy(
                 network_interfaces=[network],
