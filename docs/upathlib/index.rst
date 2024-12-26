@@ -13,3 +13,5 @@ Upathlib
 
    upathlib
    serializer
+   versioned_uploadable
+   
