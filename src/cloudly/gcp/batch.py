@@ -4,7 +4,7 @@ from typing import Literal
 
 from google.cloud import batch_v1
 
-from .auth import get_project_id, get_credentials, get_service_account_email
+from .auth import get_credentials, get_project_id, get_service_account_email
 
 
 class JobConfig:
@@ -13,9 +13,16 @@ class JobConfig:
         pass
 
     @classmethod
-    def allocation_policy(cls, *, region: str, labels: dict, network_uri: str, subnet_uri: str,
-                           no_external_ip_address: bool = True,
-                           provisioning_model: Literal['standard', 'spot', 'preemptible'] = 'standard'):
+    def allocation_policy(
+        cls,
+        *,
+        region: str,
+        labels: dict,
+        network_uri: str,
+        subnet_uri: str,
+        no_external_ip_address: bool = True,
+        provisioning_model: Literal['standard', 'spot', 'preemptible'] = 'standard',
+    ):
         """
         `network_uri` could be like this: 'projects/shared-vpc-admin/global/networks/vpcnet...'.
         `subnet_uri` could be like this: 'https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01'
@@ -26,13 +33,13 @@ class JobConfig:
             subnetwork=subnet_uri,
             no_external_ip_address=no_external_ip_address,
         )
-        provision = getattr(batch_v1.AllocationPolicy.ProvisioningModel, provisioning_model.upper())
-
-
+        provision = getattr(
+            batch_v1.AllocationPolicy.ProvisioningModel, provisioning_model.upper()
+        )
 
         return batch_v1.AllocationPolicy(
             location=batch_v1.AllocationPolicy.LocationPolicy(
-                allowed_locations=[f"regions/{region}"],
+                allowed_locations=[f'regions/{region}'],
             ),
             instances=[instances_policy_template],
             labels=labels,
@@ -41,7 +48,7 @@ class JobConfig:
             ),
             service_account=batch_v1.ServiceAccount(
                 email=get_service_account_email(),
-            )
+            ),
         )
 
     @classmethod
@@ -78,7 +85,7 @@ class Job:
         `region` is like 'us-central1'.
         """
         req = batch_v1.CreateJobRequest(
-            parent=f"projects/{get_project_id()}/locations/{region}",
+            parent=f'projects/{get_project_id()}/locations/{region}',
             job_id=name,
             job=JobConfig(**kwargs).job,
         )
@@ -89,7 +96,9 @@ class Job:
 
     @classmethod
     def list(cls, *, region: str) -> list[Job]:
-        req = batch_v1.ListJobsRequest(parent=f"projects/{get_project_id()}/locations/{region}")
+        req = batch_v1.ListJobsRequest(
+            parent=f'projects/{get_project_id()}/locations/{region}'
+        )
         jobs = cls.client().list_jobs(request=req)
         return [cls(j.name) for j in jobs]
 
