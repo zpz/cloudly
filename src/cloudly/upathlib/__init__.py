@@ -35,8 +35,7 @@ __all__ = [
 
 from pathlib import Path
 
-from . import serializer
-from . import versioned_uploadable
+from . import serializer, versioned_uploadable
 from ._blob import BlobUpath
 from ._local import LocalPathType, LocalUpath
 from ._upath import FileInfo, LockAcquireError, LockReleaseError, PathType, Upath
