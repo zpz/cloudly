@@ -23,7 +23,9 @@ import logging
 import logging.handlers
 import os
 import sys
+import time
 import warnings
+from datetime import datetime
 from datetime import datetime
 from logging import Formatter
 from typing import Union
@@ -59,17 +61,27 @@ logger = logging.getLogger(__name__)
 
 
 class DynamicFormatter(Formatter):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, with_datetime: bool = True, with_timezone: bool = True, with_level: bool = True, **kwargs):
         # TODO: could add parameters to customize formatting, as new ideas emerges.
         super().__init__(*args, **kwargs)
+        self._with_datetime = with_datetime
+        self._with_timezone = with_timezone
+        self._with_level = with_level
         self._tz = datetime.now().astimezone().tzname()
 
     def format(self, record):
         r = record
-        # asctime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(r.created))
-        # msecs = int((r.created % 1) * 10000)
-        # fmt = f'[{asctime}.{msecs} {self._tz}, {r.levelname}]  %(message)s  [({r.filename}, {r.lineno}, {r.funcName}'
-        fmt = f'%(asctime)s {self._tz} {r.levelname: <12}  %(message)s     [( {r.name}, {r.lineno}, {r.funcName}'
+        if self._with_datetime:
+            asctime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(r.created))
+            msecs = int((r.created % 1) * 10000)
+            fmt = f'{asctime}.{msecs} '
+            if self._with_timezone:
+                fmt += f"{self._tz} "
+        else:
+            fmt = ''
+        if self._with_level:
+            fmt += f"{r.levelname: <12} "
+        fmt += f"%(message)s     [( {r.name}, {r.lineno}, {r.funcName}"
 
         p = r.processName
         t = r.threadName
@@ -127,20 +139,20 @@ def set_level(level: Union[str, int] = logging.INFO) -> int:
     return level0
 
 
-def add_console_handler() -> logging.Handler:
+def add_console_handler(**kwargs) -> logging.Handler:
     """
     Log to ``sys.stderr``.
     """
     h = logging.StreamHandler()
-    h.setFormatter(DynamicFormatter())
+    h.setFormatter(DynamicFormatter(**kwargs))
     rootlogger.addHandler(h)
     return h
 
 
-def config_logger(level=logging.INFO):
+def config_logger(level=logging.INFO, **kwargs):
     # For use in one-off scripts.
     set_level(level)
-    add_console_handler()
+    add_console_handler(**kwargs)
 
 
 def add_disk_handler(
@@ -149,6 +161,7 @@ def add_disk_handler(
     maxBytes=1_000_000,
     backupCount=20,
     delay=True,
+    **kwargs,
 ):
     if foldername:
         foldername = foldername.rstrip('/')
@@ -163,7 +176,7 @@ def add_disk_handler(
         backupCount=backupCount,
         delay=delay,
     )
-    h.setFormatter(DynamicFormatter())
+    h.setFormatter(DynamicFormatter(**kwargs))
     rootlogger.addHandler(h)
     return foldername
 
