@@ -26,7 +26,6 @@ import sys
 import time
 import warnings
 from datetime import datetime
-from datetime import datetime
 from logging import Formatter
 from typing import Union
 
@@ -61,7 +60,14 @@ logger = logging.getLogger(__name__)
 
 
 class DynamicFormatter(Formatter):
-    def __init__(self, *args, with_datetime: bool = True, with_timezone: bool = True, with_level: bool = True, **kwargs):
+    def __init__(
+        self,
+        *args,
+        with_datetime: bool = True,
+        with_timezone: bool = True,
+        with_level: bool = True,
+        **kwargs,
+    ):
         # TODO: could add parameters to customize formatting, as new ideas emerges.
         super().__init__(*args, **kwargs)
         self._with_datetime = with_datetime
@@ -76,12 +82,12 @@ class DynamicFormatter(Formatter):
             msecs = int((r.created % 1) * 10000)
             fmt = f'{asctime}.{msecs} '
             if self._with_timezone:
-                fmt += f"{self._tz} "
+                fmt += f'{self._tz} '
         else:
             fmt = ''
         if self._with_level:
-            fmt += f"{r.levelname: <12} "
-        fmt += f"%(message)s     [( {r.name}, {r.lineno}, {r.funcName}"
+            fmt += f'{r.levelname: <12} '
+        fmt += f'%(message)s     [( {r.name}, {r.lineno}, {r.funcName}'
 
         p = r.processName
         t = r.threadName
