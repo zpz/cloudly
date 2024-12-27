@@ -2,4 +2,4 @@
 versioned_uploadable
 ********************
 
-.. automodule:: cloudly.util.versioned_uploadable
+.. automodule:: cloudly.upathlib.versioned_uploadable

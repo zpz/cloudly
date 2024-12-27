@@ -16,4 +16,3 @@ Utilities
    logging
    multiplexer
    seq
-   versioned_uploadable

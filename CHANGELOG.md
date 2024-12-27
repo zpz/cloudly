@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.2.4] - in progress
+
+- Move `versioned_uploadable` from `util` to `upathlib`, keeping a reference in `util` for short-term backcompat.
+- New module `cloudly.gcp.batch`.
+
+
 ## [0.2.3] - 2024-12-22
 
 - Improvements to Sphinx-generated documentation.
@@ -22,12 +28,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [0.2.0] - 2024-12-21
 
-- Merged package `biglist` into `cloudly`. For change log of the `biglist` code up to this point, see the original [`biglist` repo](https://github.com/zpz/biglist).
+- Merged package `biglist` into `cloudly`. For changelog of the `biglist` code up to this point, see the original [`biglist` repo](https://github.com/zpz/biglist).
 
 
 ## [0.1.0] - 2024-12-20
 
-- Merged package `upathlib` into `cloudly`. For change log of the `upathlib` code up to this point, see the original [`upathlib` repo](https://github.com/zpz/upathlib).
+- Merged package `upathlib` into `cloudly`. For changelog of the `upathlib` code up to this point, see the original [`upathlib` repo](https://github.com/zpz/upathlib).
 - New module `cloudly.gcp.logging`.
 
 

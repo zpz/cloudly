@@ -1,7 +1,7 @@
 import os.path
 
 from cloudly.upathlib import LocalUpath
-from cloudly.util.versioned_uploadable import VersionedUploadable
+from cloudly.upathlib.versioned_uploadable import VersionedUploadable
 
 joinpath = os.path.join
 

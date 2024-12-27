@@ -15,6 +15,7 @@ dependencies = [
     "typing-extensions",
     "tzdata",
     "zstandard",
+    "deprecation",
 ]
 requires-python = ">=3.10"
 readme = "README.rst"
@@ -44,9 +45,13 @@ gcp = [
     "google-auth",
     "google-api-core",
     "google-api-python-client >=2.13.9,<3.0",
-    "google-cloud-secret-manager",
+    "google-cloud-batch",
+    "google-cloud-compute",
     "google-cloud-logging",
+    "google-cloud-scheduler",
+    "google-cloud-secret-manager",
     "google-cloud-storage >=2.0,<3.0",
+    "google-cloud-workflows",
     "requests",
 ]
 test = [
