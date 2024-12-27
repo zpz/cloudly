@@ -330,10 +330,13 @@ class JobConfig:
             labels=labels,
             **kwargs,
         )
-
     @property
     def job(self) -> batch_v1.Job:
         return self._job
+
+    @property
+    def region(self) -> str:
+        return self._job.allocation_policy.location.allowed_locations[0].split('/')[1]
 
 
 class Job:
@@ -341,17 +344,20 @@ class Job:
     def client(self):
         return batch_v1.BatchServiceClient(credentials=get_credentials())
 
+    def define(cls, *, region: str, **kwargs) -> JobConfig:
+        return JobConfig(region=region, **kwargs)
+
     @classmethod
-    def create(cls, *, region: str, name: str, **kwargs) -> Job:
+    def create(cls, *, name: str, config: JobConfig) -> Job:
         """
         There are some restrictions on the form of `name`; see GCP doc for details.
 
         `region` is like 'us-central1'.
         """
         req = batch_v1.CreateJobRequest(
-            parent=f'projects/{get_project_id()}/locations/{region}',
+            parent=f'projects/{get_project_id()}/locations/{config.region}',
             job_id=name,
-            job=JobConfig(region=region, **kwargs).job,
+            job=config.job,
         )
         job = cls.client().create_job(req)
         obj = cls(job.name, job)
