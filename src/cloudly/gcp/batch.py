@@ -61,6 +61,13 @@ class Container:
             else:
                 options = '--runtime=nvidia'
 
+        if options:
+            if '--log-driver ' not in options and '--log-driver=' not in options:
+                options += ' --log-driver=gcplogs'
+        else:
+            options = '--log-driver=gcplogs'
+        # TODO: is this necessary? is this enough by itself?
+
         if local_ssd_disk is not None:
             volumes = [
                 f'{local_ssd_disk.mount_path}:{disk_mount_path or local_ssd_disk.mount_path}:{local_ssd_disk.access_mode}'
