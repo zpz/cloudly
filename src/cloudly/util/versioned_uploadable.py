@@ -1,8 +1,11 @@
 import warnings
 
 from cloudly.upathlib.versioned_uploadable import (  # noqa: F401
-    VersionedUploadable, VersionExistsError, VersionNotFoundError, 
-    is_version, make_version,
+    VersionedUploadable,
+    VersionExistsError,
+    VersionNotFoundError,
+    is_version,
+    make_version,
 )
 
 warnings.warn(
