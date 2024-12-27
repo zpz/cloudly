@@ -8,22 +8,30 @@ from __future__ import annotations
 
 __all__ = ['Job']
 
-from typing import Literal
-from collections.abc import Sequence
-import time
-import socket
 import os
+import time
+from typing import Literal
 
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
 
-from .auth import get_credentials, get_project_id, get_service_account_email
 from cloudly.util.logging import get_calling_file
+
+from .auth import get_credentials, get_project_id, get_service_account_email
 
 
 class Container:
-    def __init__(self, *, image_uri: str, commands: str, options: str | None = None, environment: dict[str, str] = None,
-                 local_ssd_disk: LocalSSD | None = None, disk_mount_path: str = None, gpu: GPU | None = None):
+    def __init__(
+        self,
+        *,
+        image_uri: str,
+        commands: str,
+        options: str | None = None,
+        environment: dict[str, str] = None,
+        local_ssd_disk: LocalSSD | None = None,
+        disk_mount_path: str = None,
+        gpu: GPU | None = None,
+    ):
         """
         Parameters
         ----------
@@ -38,12 +46,9 @@ class Container:
         """
         if not commands.startswith('-c '):
             commands = '-c ' + commands
-        
+
         if environment:
-            environment = ' '.join(
-                f"-e {k}='{v}'"
-                for k, v in environment.items()
-            )
+            environment = ' '.join(f"-e {k}='{v}'" for k, v in environment.items())
             if options:
                 options = options + ' ' + environment
             else:
@@ -58,7 +63,7 @@ class Container:
 
         if local_ssd_disk is not None:
             volumes = [
-                f"{local_ssd_disk.mount_path}:{disk_mount_path or local_ssd_disk.mount_path}:{local_ssd_disk.access_mode}"
+                f'{local_ssd_disk.mount_path}:{disk_mount_path or local_ssd_disk.mount_path}:{local_ssd_disk.access_mode}'
             ]
         else:
             volumes = None
@@ -81,9 +86,15 @@ class LocalSSD:
     Local SSDs are attached to each worker node for use during the lifetime of the tasks.
     They are not "persistent" storage that lives beyond the batch job.
     """
-    def __init__(self, *, disk_size_gb: int, device_name: str = 'local-ssd', mount_path: str = '/mnt', 
-                 access_mode: Literal['ro', 'rw'] = 'rw',
-                 ):
+
+    def __init__(
+        self,
+        *,
+        disk_size_gb: int,
+        device_name: str = 'local-ssd',
+        mount_path: str = '/mnt',
+        access_mode: Literal['ro', 'rw'] = 'rw',
+    ):
         assert disk_size_gb >= 10, disk_size_gb
         self.disk_size_gb = disk_size_gb
         self.device_name = device_name
@@ -93,7 +104,9 @@ class LocalSSD:
     @property
     def attached_disk(self):
         return batch_v1.AllocationPolicy.AttachedDisk(
-            new_disk=batch_v1.AllocationPolicy.Disk(type_='local-ssd', size_gb=self.disk_size_gb),
+            new_disk=batch_v1.AllocationPolicy.Disk(
+                type_='local-ssd', size_gb=self.disk_size_gb
+            ),
             device_name=self.device_name,
         )
 
@@ -121,18 +134,22 @@ class GPU:
 
     @property
     def accelerator(self):
-        return batch_v1.AllocationPolicy.Accelerator(type_=self.gpu_type, count=self.gpu_count)
+        return batch_v1.AllocationPolicy.Accelerator(
+            type_=self.gpu_type, count=self.gpu_count
+        )
 
 
 class TaskConfig:
-    def __init__(self, *, 
-                 container: dict, 
-                 max_run_duration_seconds: int | None = None, 
-                 max_retry_count: int = 0,
-                 ignore_exit_status: bool = False, 
-                 always_run: bool = False,
-                 local_ssd_disk: LocalSSD | None = None,
-                 ):
+    def __init__(
+        self,
+        *,
+        container: dict,
+        max_run_duration_seconds: int | None = None,
+        max_retry_count: int = 0,
+        ignore_exit_status: bool = False,
+        always_run: bool = False,
+        local_ssd_disk: LocalSSD | None = None,
+    ):
         """
         Parameters
         ----------
@@ -161,16 +178,20 @@ class TaskConfig:
     @property
     def task_spec(self) -> batch_v1.TaskSpec:
         return self._task_spec
-    
+
 
 class JobConfig:
     @classmethod
-    def task_group(cls, *, 
-                   task_spec: dict, 
-                   task_count: int = 1, 
-                   task_count_per_node: int = 1, 
-                   parallelism: int = None, 
-                   permissive_ssh: bool = True, **kwargs):
+    def task_group(
+        cls,
+        *,
+        task_spec: dict,
+        task_count: int = 1,
+        task_count_per_node: int = 1,
+        parallelism: int = None,
+        permissive_ssh: bool = True,
+        **kwargs,
+    ):
         """
         Parameters
         ----------
@@ -261,15 +282,16 @@ class JobConfig:
         }
         return zz
 
-    def __init__(self,
-                *, 
-                task_group: dict,
-                allocation_policy: dict,
-                labels: dict[str, str] | None = None,
-                logs_policy: batch_v1.LogsPolicy | None = None,
-                local_ssd: dict | None = None,
-                gpu: dict | None = None,
-                **kwargs,
+    def __init__(
+        self,
+        *,
+        task_group: dict,
+        allocation_policy: dict,
+        labels: dict[str, str] | None = None,
+        logs_policy: batch_v1.LogsPolicy | None = None,
+        local_ssd: dict | None = None,
+        gpu: dict | None = None,
+        **kwargs,
     ):
         if gpu:
             gpu = GPU(**gpu)
@@ -286,9 +308,13 @@ class JobConfig:
         labels = self.labels(**(labels or {}))
 
         task_group = self.task_group(**task_group)
-        allocation_policy = self.allocation_policy(gpu=gpu, local_ssd_disk=local_ssd_disk, labels=labels, **allocation_policy)
+        allocation_policy = self.allocation_policy(
+            gpu=gpu, local_ssd_disk=local_ssd_disk, labels=labels, **allocation_policy
+        )
         if logs_policy is None:
-            logs_policy = batch_v1.LogsPolicy(destination=batch_v1.LogsPolicy.Destination.CLOUD_LOGGING)
+            logs_policy = batch_v1.LogsPolicy(
+                destination=batch_v1.LogsPolicy.Destination.CLOUD_LOGGING
+            )
 
         self._job = batch_v1.Job(
             task_groups=[task_group],
