@@ -339,14 +339,18 @@ class JobConfig:
     def region(self) -> str:
         return self._job.allocation_policy.location.allowed_locations[0].split('/')[1]
 
+    @property
+    def api_url(self) -> str:
+        return f"https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{self.region}"
+
 
 class Job:
     @classmethod
     def client(self):
         return batch_v1.BatchServiceClient(credentials=get_credentials())
 
-    def define(cls, *, region: str, **kwargs) -> JobConfig:
-        return JobConfig(region=region, **kwargs)
+    def define(cls, **kwargs) -> JobConfig:
+        return JobConfig(**kwargs)
 
     @classmethod
     def create(cls, *, name: str, config: JobConfig) -> Job:
