@@ -17,7 +17,7 @@ from typing import TypeVar
 from cloudly.upathlib import PathType, Upath
 
 from .datetime import utcnow
-from .versioned_uploadable import make_version
+from cloudly.upathlib.versioned_uploadable import make_version
 
 logger = logging.getLogger(__name__)
 
