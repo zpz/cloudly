@@ -341,7 +341,7 @@ class JobConfig:
 
     @property
     def api_url(self) -> str:
-        return f"https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{self.region}"
+        return f'https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{self.region}'
 
 
 class Job:
