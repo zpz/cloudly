@@ -330,6 +330,7 @@ class JobConfig:
             labels=labels,
             **kwargs,
         )
+
     @property
     def job(self) -> batch_v1.Job:
         return self._job

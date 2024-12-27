@@ -33,9 +33,10 @@ from io import UnsupportedOperation
 from typing import Any
 
 from cloudly.util.datetime import utcnow
-from ._upath import Upath
-from ._local import LocalUpath
+
 from ._blob import BlobUpath
+from ._local import LocalUpath
+from ._upath import Upath
 
 logger = logging.getLogger(__name__)
 
