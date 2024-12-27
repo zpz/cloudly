@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 from typing import TypeVar
 
 from cloudly.upathlib import PathType, Upath
+from cloudly.upathlib.versioned_uploadable import make_version
 
 from .datetime import utcnow
-from cloudly.upathlib.versioned_uploadable import make_version
 
 logger = logging.getLogger(__name__)
 
