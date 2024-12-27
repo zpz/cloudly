@@ -121,7 +121,7 @@ class GPU:
 
     @property
     def accelerator(self):
-        return batch_v1.AllocationPolicy.Accelerator(type_=self.gpu_type, count=self.gpu_count)]
+        return batch_v1.AllocationPolicy.Accelerator(type_=self.gpu_type, count=self.gpu_count)
 
 
 class TaskConfig:
