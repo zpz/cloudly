@@ -8,18 +8,14 @@ from __future__ import annotations
 
 __all__ = ['Job', 'JobConfig']
 
-import os
-import string
 import time
 from typing import Literal
 
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
 
-from cloudly.util.logging import get_calling_file
-
 from .auth import get_credentials, get_project_id, get_service_account_email
-from .compute import validate_label_key, validate_label_value, basic_resource_labels
+from .compute import basic_resource_labels, validate_label_key, validate_label_value
 
 
 class Container:
@@ -413,7 +409,17 @@ class Job:
         self._refresh()
         return self._job.status
 
-    def state(self) -> Literal['STATE_UNSPECIFIED', 'QUEUED', 'SCHEDULED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'DELETION_IN_PROGRESS']:
+    def state(
+        self,
+    ) -> Literal[
+        'STATE_UNSPECIFIED',
+        'QUEUED',
+        'SCHEDULED',
+        'RUNNING',
+        'SUCCEEDED',
+        'FAILED',
+        'DELETION_IN_PROGRESS',
+    ]:
         return self.status().state.name
 
     def wait(self, *, sleep_interval: int = 10, timeout: int | None = None) -> str:

@@ -3,15 +3,16 @@ from __future__ import annotations
 __all__ = ['Instance']
 
 
-from typing import Literal
-import string
 import os
+import string
+from typing import Literal
 
-from google.cloud import compute_v1
 import google.api_core.exceptions
+from google.cloud import compute_v1
 
 from cloudly.util.logging import get_calling_file
-from .auth import get_service_account_email, get_project_id, get_credentials
+
+from .auth import get_credentials, get_project_id, get_service_account_email
 
 
 class InstanceNotFoundError(Exception):
@@ -53,11 +54,23 @@ def basic_resource_labels():
         'created-by-line': str(caller.lineno),
         'created-by-function': caller.function,
     }
-    
+
 
 class InstanceConfig:
-    def __init__(self, *, name: str, zone: str, machine_type: str, labels: dict[str, str] | None = None, local_ssd_size_gb: int | None = None,
-                 network_uri: str, subnet_uri: str, startup_script: str | None = None, gpu_type: str | None = None, gpu_count: int | None = None):
+    def __init__(
+        self,
+        *,
+        name: str,
+        zone: str,
+        machine_type: str,
+        labels: dict[str, str] | None = None,
+        local_ssd_size_gb: int | None = None,
+        network_uri: str,
+        subnet_uri: str,
+        startup_script: str | None = None,
+        gpu_type: str | None = None,
+        gpu_count: int | None = None,
+    ):
         """
         `network_uri` may look like "projects/shared-vpc-admin/global/networks/vpcnet-shared-prod-01".
         `subnet_uri` may look like "https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01".
@@ -77,23 +90,30 @@ class InstanceConfig:
         disks = []
         if local_ssd_size_gb:
             # TODO: accepted range of this value?
-            disks.append(compute_v1.AttachedDisk(
-                type_=compute_v1.AttachedDisk.Type.SCRATCH.name,
-                interface='NVME',
-                disk_size_gb=local_ssd_size_gb,
-                initialize_params=compute_v1.AttachedDiskInitializeParams(
-                    disk_type=f"zones/{zone}/diskTypes/local-ssd",
-                ),
-                auto_delete=True,
-            ))
-        network = compute_v1.NetworkInterface(network=network_uri, subnetwork=subnet_uri)
+            disks.append(
+                compute_v1.AttachedDisk(
+                    type_=compute_v1.AttachedDisk.Type.SCRATCH.name,
+                    interface='NVME',
+                    disk_size_gb=local_ssd_size_gb,
+                    initialize_params=compute_v1.AttachedDiskInitializeParams(
+                        disk_type=f'zones/{zone}/diskTypes/local-ssd',
+                    ),
+                    auto_delete=True,
+                )
+            )
+        network = compute_v1.NetworkInterface(
+            network=network_uri, subnetwork=subnet_uri
+        )
         metadata = None
         if startup_script:
-            metadata = compute_v1.Metadata(items=[
-                compute_v1.Items(key='startup-script', value=startup_script)
-            ])
+            metadata = compute_v1.Metadata(
+                items=[compute_v1.Items(key='startup-script', value=startup_script)]
+            )
         service_accounts = [
-            compute_v1.ServiceAccount(email=get_service_account_email(), scopes=['https://www.googleapis.com/auth/cloud-platform']),
+            compute_v1.ServiceAccount(
+                email=get_service_account_email(),
+                scopes=['https://www.googleapis.com/auth/cloud-platform'],
+            ),
         ]
         guest_accelerators = None
         scheduling = None
@@ -101,7 +121,7 @@ class InstanceConfig:
             guest_accelerators = [
                 compute_v1.AcceleratorConfig(
                     accelerator_count=gpu_count,
-                    accelerator_type=f"projects/{get_project_id()}/zones/{zone}/acceleratorTypes/{gpu_type}",
+                    accelerator_type=f'projects/{get_project_id()}/zones/{zone}/acceleratorTypes/{gpu_type}',
                 )
             ]
             scheduling = compute_v1.Scheduling(on_host_maintenance='TERMINATE')
@@ -109,7 +129,7 @@ class InstanceConfig:
 
         self._instance = compute_v1.Instance(
             name=name,
-            machine_type=f"zones/{zone}/machineTypes/{machine_type}",
+            machine_type=f'zones/{zone}/machineTypes/{machine_type}',
             labels=labels,
             disks=disks,
             network_interfaces=[network],
@@ -124,8 +144,6 @@ class InstanceConfig:
         return self._instance
 
 
-
-
 class Instance:
     @classmethod
     def _client(cls) -> compute_v1.InstancesClient:
@@ -134,7 +152,9 @@ class Instance:
     @classmethod
     def create(cls, *, name: str, zone: str, **kwargs) -> Instance:
         config = InstanceConfig(name=name, zone=zone, **kwargs).instance
-        req = compute_v1.InsertInstanceRequest(project=get_project_id(), zone=zone, instance_resource=config)
+        req = compute_v1.InsertInstanceRequest(
+            project=get_project_id(), zone=zone, instance_resource=config
+        )
         op = cls._client().insert(req)
         op.result()
         return cls(name, zone)
@@ -160,18 +180,32 @@ class Instance:
         return self._name
 
     def _refresh(self):
-        req = compute_v1.GetInstanceRequest(instance=self._name, project=get_project_id(), zone=self._zone)
+        req = compute_v1.GetInstanceRequest(
+            instance=self._name, project=get_project_id(), zone=self._zone
+        )
         try:
             self._instance = self._client().get(req)
         except google.api_core.exceptions.NotFound:
             raise InstanceNotFoundError(self._name)
 
     def delete(self) -> None:
-        req = compute_v1.DeleteInstanceRequest(instance=self._name, project=get_project_id(), zone=self._zone)
+        req = compute_v1.DeleteInstanceRequest(
+            instance=self._name, project=get_project_id(), zone=self._zone
+        )
         op = self._client().delete(req)
         op.result()
 
-    def state(self) -> Literal['PROVISIONING', 'STAGING', 'RUNNING', 'STOPPING', 'SUSPENDING', 'SUSPENDED', 'REPAIRING', 'TERMINATED']:
+    def state(
+        self,
+    ) -> Literal[
+        'PROVISIONING',
+        'STAGING',
+        'RUNNING',
+        'STOPPING',
+        'SUSPENDING',
+        'SUSPENDED',
+        'REPAIRING',
+        'TERMINATED',
+    ]:
         self._refresh()
         return self._instance.status
-
