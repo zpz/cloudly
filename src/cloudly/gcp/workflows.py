@@ -140,10 +140,10 @@ class BatchStep(Step):
                 'auth': {'type': 'OAuth2'},
                 'body': job_config,
             },
-            'result': f"{name}_result",
+            'result': f'{name}_result',
         }
         super().__init__(name, content)
-        self.job_url = f"{api_url}/{name}"
+        self.job_url = f'{api_url}/{name}'
 
 
 class Execution:
