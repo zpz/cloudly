@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import uuid
-from collections.abc import Iterable, Sequence
 import json
+import uuid
+from collections.abc import Sequence
 
 from google.cloud import workflows_v1
-from .auth import get_credentials, get_project_id
 from google.cloud.workflows import executions_v1
+
+from .auth import get_credentials, get_project_id
 
 
 class Step:
@@ -52,22 +53,28 @@ class Step:
         self._content = content
 
     def render(self) -> dict[str, dict]:
-        return {
-            self.name: self._content
-        }
+        return {self.name: self._content}
 
 
 class WaitStep(Step):
     """
     Wait for a GCP service such as a Batch job to finish.
     """
-    def __init__(self, name: str, *, job_url: str, success_state: str = 'SUCCEEDED', failure_state: str = 'ERROR', poll_interval_seconds: int = 10):
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        job_url: str,
+        success_state: str = 'SUCCEEDED',
+        failure_state: str = 'ERROR',
+        poll_interval_seconds: int = 10,
+    ):
         uid = str(uuid.uuid4()).replace('-', '')[:8]
         content = {
             'steps': [
                 {
-                    f'poll_{uid}':
-                    {
+                    f'poll_{uid}': {
                         'call': 'http.get',
                         'args': {
                             'url': job_url,
@@ -77,8 +84,7 @@ class WaitStep(Step):
                     }
                 },
                 {
-                    f'check_{uid}':
-                    {
+                    f'check_{uid}': {
                         'switch': [
                             {
                                 'condition': f'${{poll_{uid}_result.body.status.state == "{success_state}"}}',
@@ -86,29 +92,27 @@ class WaitStep(Step):
                             },
                             {
                                 'condition': f'${{poll_{uid}_result.body.status.state == "{failure_state}"}}',
-                                'raise': f'{name} error: ${{poll_{uid}_result.body.status.state}}'
-                            }
+                                'raise': f'{name} error: ${{poll_{uid}_result.body.status.state}}',
+                            },
                         ],
                         'next': f'sleep_{uid}',
                     }
                 },
                 {
-                    f'sleep_{uid}':
-                    {
+                    f'sleep_{uid}': {
                         'call': 'sys.sleep',
                         'args': {'seconds': poll_interval_seconds},
                         'next': f'poll_{uid}',
                     }
                 },
                 {
-                    f'log_{uid}':
-                    {
+                    f'log_{uid}': {
                         'call': 'sys.log',
                         'args': {
                             'data': f'${{"{name} state: poll_{uid}_result.body.status.state"}}',
-                        }
+                        },
                     }
-                }
+                },
             ]
         }
         super().__init__(name, content)
@@ -133,7 +137,7 @@ class Execution:
     @property
     def name(self):
         return self._execution.name
-    
+
     def _refresh(self):
         req = executions_v1.GetExecutionRequest(name=self.name)
         self._execution = self._execution_client().get_execution(req)
@@ -151,7 +155,6 @@ class Execution:
         return self._execution.state.name
 
 
-
 class Workflow:
     @classmethod
     def _workflow_client(cls):
@@ -162,7 +165,14 @@ class Workflow:
         return workflows_v1.ExecutionsClient(credentials=get_credentials())
 
     @classmethod
-    def create(cls, name: str, steps: Sequence[Step], *, region: str, param_names: Sequence[str] | None = None) -> Workflow:
+    def create(
+        cls,
+        name: str,
+        steps: Sequence[Step],
+        *,
+        region: str,
+        param_names: Sequence[str] | None = None,
+    ) -> Workflow:
         """
         `name` needs to be unique, hence it's recommended to construct it with some randomness.
         """
@@ -173,12 +183,16 @@ class Workflow:
         content = json.dumps(content)
 
         workflow = workflows_v1.Workflow(source_contents=content)
-        req = workflows_v1.CreateWorkflowRequest(parent=f"projects/{get_project_id()}/locations/{region}", workflow=workflow, workflow_id=name)
+        req = workflows_v1.CreateWorkflowRequest(
+            parent=f'projects/{get_project_id()}/locations/{region}',
+            workflow=workflow,
+            workflow_id=name,
+        )
         op = cls._workflow_client().create_workflow(req)
         resp = op.result()
         obj = cls(resp.name, resp)
         return obj
-    
+
     def __init__(self, name: str, workflow: workflows_v1.Workflow | None = None):
         """
         `name` is like "projects/<project_id>/locations/<region>/workflows/<name>".
@@ -202,6 +216,3 @@ class Workflow:
     def delete(self) -> None:
         req = workflows_v1.DeleteWorkflowRequest(name=self._name)
         self._workflow_client().delete_workflow(req)
-
-
-
