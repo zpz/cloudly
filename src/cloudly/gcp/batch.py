@@ -6,11 +6,12 @@ User code runs within a Docker container. Running a standalone script is not sup
 
 from __future__ import annotations
 
-__all__ = ['Job']
+__all__ = ['Job', 'JobConfig']
 
 import os
 import time
 from typing import Literal
+import string
 
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
@@ -18,6 +19,35 @@ from google.protobuf.duration_pb2 import Duration
 from cloudly.util.logging import get_calling_file
 
 from .auth import get_credentials, get_project_id, get_service_account_email
+
+
+
+def validate_label_key(val: str) -> str:
+    if len(val) < 1 or len(val) > 63:
+        raise ValueError(val)
+    allowed = string.ascii_lowercase + string.digits + '-_' 
+    if any(c not in allowed for c in val):
+        raise ValueError(val)
+    if val[0] not in string.ascii_lowercase:
+        raise ValueError(val)
+    return val
+
+        
+def validate_label_value(val: str, *, fix: bool = False) -> str:
+    val0 = val
+    if fix:
+        val = val.strip('- ').lower()
+        for a in ('<', '>', ' ', '_', '.', ','):
+            val = val.replace(a, '-')
+        val = val.replace('/', '--')
+        val = val.strip(' -')
+
+    if len(val) > 63:
+        raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
+    allowed = string.ascii_lowercase + string.digits + '-_' 
+    if any(c not in allowed for c in val):
+        raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
+    return val
 
 
 class Container:
@@ -35,6 +65,8 @@ class Container:
         """
         Parameters
         ----------
+        image_uri
+            The full tag of the image.
         commands
             The commands to be run within the Docker container, such as 'python -m mypackage.mymodule --arg1 x --arg2 y'.
 
@@ -98,18 +130,18 @@ class LocalSSD:
         self,
         *,
         disk_size_gb: int,
-        device_name: str = 'local-ssd',
-        mount_path: str = '/mnt',
-        access_mode: Literal['ro', 'rw'] = 'rw',
+        device_name: str | None = None,
+        mount_path: str | None = None,
+        access_mode: Literal['ro', 'rw'] | None = None,
     ):
         assert disk_size_gb >= 10, disk_size_gb
         self.disk_size_gb = disk_size_gb
-        self.device_name = device_name
-        self.mount_path = mount_path
-        self.access_mode = access_mode
+        self.device_name = device_name or 'local-ssd'
+        self.mount_path = mount_path or '/mnt'
+        self.access_mode = access_mode or 'rw'
 
     @property
-    def attached_disk(self):
+    def attached_disk(self) -> batch_v1.AllocationPolicy.AttachedDisk:
         return batch_v1.AllocationPolicy.AttachedDisk(
             new_disk=batch_v1.AllocationPolicy.Disk(
                 type_='local-ssd', size_gb=self.disk_size_gb
@@ -118,7 +150,7 @@ class LocalSSD:
         )
 
     @property
-    def volume(self):
+    def volume(self) -> batch_v1.Volume:
         opts = ['async', self.access_mode]
         if self.access_mode == 'ro':
             opts.append('noload')
@@ -140,7 +172,7 @@ class GPU:
         self.gpu_count = gpu_count
 
     @property
-    def accelerator(self):
+    def accelerator(self) -> batch_v1.AllocationPolicy.Accelerator:
         return batch_v1.AllocationPolicy.Accelerator(
             type_=self.gpu_type, count=self.gpu_count
         )
@@ -152,9 +184,9 @@ class TaskConfig:
         *,
         container: dict,
         max_run_duration_seconds: int | None = None,
-        max_retry_count: int = 0,
-        ignore_exit_status: bool = False,
-        always_run: bool = False,
+        max_retry_count: int | None = None,
+        ignore_exit_status: bool | None = None,
+        always_run: bool | None = None,
         local_ssd_disk: LocalSSD | None = None,
     ):
         """
@@ -163,9 +195,13 @@ class TaskConfig:
         environment
             Env vars to be passed to all tasks.
         """
+        if ignore_exit_status is None:
+            ignore_exit_status = False
+        if always_run is None:
+            always_run = False
         container = Container(**container, local_ssd_disk=local_ssd_disk)
         runnable = batch_v1.Runnable(
-            container=container,
+            container=container.container,
             ignore_exit_status=ignore_exit_status,
             always_run=always_run,
         )
@@ -178,7 +214,7 @@ class TaskConfig:
         self._task_spec = batch_v1.TaskSpec(
             runnables=[runnable],
             max_run_duration=max_run_duration,
-            max_retry_count=max_retry_count,
+            max_retry_count=max_retry_count or 0,
             volumes=None if local_ssd_disk is None else [local_ssd_disk.volume],
         )
 
@@ -193,12 +229,12 @@ class JobConfig:
         cls,
         *,
         task_spec: dict,
-        task_count: int = 1,
-        task_count_per_node: int = 1,
-        parallelism: int = None,
-        permissive_ssh: bool = True,
+        task_count: int | None = None,
+        task_count_per_node: int | None = None,
+        parallelism: int | None = None,
+        permissive_ssh: bool | None = None,
         **kwargs,
-    ):
+    ) -> batch_v1.TaskGroup:
         """
         Parameters
         ----------
@@ -209,12 +245,14 @@ class JobConfig:
         parallelism
             Number of tasks that can be running across all nodes at any time.
         """
+        if permissive_ssh is None:
+            permissive_ssh = True
         task_spec = TaskConfig(**task_spec).task_spec
         return batch_v1.TaskGroup(
             task_spec=task_spec,
-            task_count=task_count,
+            task_count=task_count or 1,
             parallelism=parallelism,
-            task_count_per_node=task_count_per_node,
+            task_count_per_node=task_count_per_node or 1,
             permissive_ssh=permissive_ssh,
             **kwargs,
         )
@@ -227,12 +265,12 @@ class JobConfig:
         labels: dict,
         network_uri: str,
         subnet_uri: str,
-        no_external_ip_address: bool = True,
-        provisioning_model: Literal['standard', 'spot', 'preemptible'] = 'standard',
         machine_type: str,
+        no_external_ip_address: bool | None = None,
+        provisioning_model: Literal['standard', 'spot', 'preemptible'] | None = None,
         gpu: GPU | None = None,
         local_ssd_disk: LocalSSD | None = None,
-    ):
+    ) -> batch_v1.AllocationPolicy:
         """
         Parameters
         ----------
@@ -243,6 +281,11 @@ class JobConfig:
         subnet_uri
             Could be like this: 'https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01'
         """
+        if no_external_ip_address is None:
+            no_external_ip_address = True
+        if provisioning_model is None:
+            provisioning_model = 'standard'
+
         network = batch_v1.AllocationPolicy.NetworkInterface(
             network=network_uri,
             subnetwork=subnet_uri,
@@ -277,7 +320,7 @@ class JobConfig:
         )
 
     @classmethod
-    def labels(cls, **kwargs):
+    def labels(cls, **kwargs) -> dict[str, str]:
         # There are some restrictions to the label values.
         # See https://cloud.google.com/batch/docs/organize-resources-using-labels
         caller = get_calling_file()
@@ -287,6 +330,7 @@ class JobConfig:
             'created-by-function': caller.function,
             **kwargs,
         }
+        zz = {validate_label_key(k): validate_label_value(v, fix=True) for k, v in zz.items()}
         return zz
 
     def __init__(
@@ -339,32 +383,34 @@ class JobConfig:
     def region(self) -> str:
         return self._job.allocation_policy.location.allowed_locations[0].split('/')[1]
 
-    @property
-    def api_url(self) -> str:
-        return f'https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{self.region}'
+    # @property
+    # def api_url(self) -> str:
+    #     return f'https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{self.region}'
 
 
 class Job:
     @classmethod
-    def client(self):
+    def _client(self):
         return batch_v1.BatchServiceClient(credentials=get_credentials())
+        # TODO: this client object has a context manager; check it out.
 
-    def define(cls, **kwargs) -> JobConfig:
-        return JobConfig(**kwargs)
+    # def define(cls, **kwargs) -> JobConfig:
+    #     return JobConfig(**kwargs)
 
     @classmethod
     def create(cls, *, name: str, config: JobConfig) -> Job:
         """
         There are some restrictions on the form of `name`; see GCP doc for details.
-
-        `region` is like 'us-central1'.
+        In addition, the batch name must be unique. For this reason, user may want to construct the name
+        with some randomness.
         """
+        validate_label_key(name)
         req = batch_v1.CreateJobRequest(
             parent=f'projects/{get_project_id()}/locations/{config.region}',
             job_id=name,
             job=config.job,
         )
-        job = cls.client().create_job(req)
+        job = cls._client().create_job(req)
         obj = cls(job.name, job)
         return obj
 
@@ -373,13 +419,14 @@ class Job:
         req = batch_v1.ListJobsRequest(
             parent=f'projects/{get_project_id()}/locations/{region}'
         )
-        jobs = cls.client().list_jobs(request=req)
+        jobs = cls._client().list_jobs(request=req)
         return [cls(j.name, j) for j in jobs]
 
     def __init__(self, name: str, job: batch_v1.Job | None = None):
         """
         `name` is like 'projects/<project-id>/locations/<location>/jobs/<name>'.
         This can also be considered the job "ID" or "URI".
+        This is available from the object returned by :meth:`create`.
 
         `job` is not needed because it can be created if needed.
         It is accepted in case you already have it. See :meth:`create`, :meth:`list`.
@@ -388,12 +435,12 @@ class Job:
         self._job: batch_v1.Job = job
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._name
 
     def _refresh(self):
         req = batch_v1.GetJobRequest(name=self.name)
-        self._job = self.client().get_job(request=req)
+        self._job = self._client().get_job(request=req)
 
     def status(self) -> batch_v1.JobStatus:
         """
@@ -420,6 +467,6 @@ class Job:
             if timeout and total_wait >= timeout:
                 raise TimeoutError
 
-    def delete(self):
+    def delete(self) -> None:
         req = batch_v1.DeleteJobRequest(name=self.name)
-        self.client().delete_job(req)
+        self._client().delete_job(req)
