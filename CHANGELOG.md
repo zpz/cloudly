@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Move `versioned_uploadable` from `util` to `upathlib`, keeping a reference in `util` for short-term backcompat.
 - Finetune log formatting.
 - New module `cloudly.gcp.batch`.
+- New module `cloudly.gcp.workflows`.
 
 
 ## [0.2.3] - 2024-12-22

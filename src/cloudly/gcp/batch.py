@@ -56,10 +56,10 @@ class Container:
         image_uri: str,
         commands: str,
         options: str | None = None,
-        environment: dict[str, str] = None,
         local_ssd_disk: LocalSSD | None = None,
         disk_mount_path: str = None,
         gpu: GPU | None = None,
+        **kwargs,
     ):
         """
         Parameters
@@ -71,19 +71,11 @@ class Container:
 
             This is the command you would run if you are within the container.
         options
-            The option string to be applied to `docker run`, such as '-e NAME=abc --network host'.
-        environment
-            Env vars to be passed into the container. If this is used, then the same should not be passed via `options`.
+            The option string to be applied to `docker run`, such as '-e NAME=abc --network host'. As this example shows,
+            environment variables that you want to be passed into the container are also handled by `options`.
         """
         if not commands.startswith('-c '):
             commands = '-c ' + commands
-
-        if environment:
-            environment = ' '.join(f"-e {k}='{v}'" for k, v in environment.items())
-            if options:
-                options = options + ' ' + environment
-            else:
-                options = environment
 
         if gpu:
             if options:
@@ -112,6 +104,7 @@ class Container:
             options=options,
             entrypoint='/bin/bash',
             volumes=volumes,
+            **kwargs,
         )
 
     @property
@@ -187,13 +180,8 @@ class TaskConfig:
         ignore_exit_status: bool | None = None,
         always_run: bool | None = None,
         local_ssd_disk: LocalSSD | None = None,
+        **kwargs,
     ):
-        """
-        Parameters
-        ----------
-        environment
-            Env vars to be passed to all tasks.
-        """
         if ignore_exit_status is None:
             ignore_exit_status = False
         if always_run is None:
@@ -215,6 +203,7 @@ class TaskConfig:
             max_run_duration=max_run_duration,
             max_retry_count=max_retry_count or 0,
             volumes=None if local_ssd_disk is None else [local_ssd_disk.volume],
+            **kwargs,
         )
 
     @property
@@ -269,6 +258,7 @@ class JobConfig:
         provisioning_model: Literal['standard', 'spot', 'preemptible'] | None = None,
         gpu: GPU | None = None,
         local_ssd_disk: LocalSSD | None = None,
+        **kwargs,
     ) -> batch_v1.AllocationPolicy:
         """
         Parameters
@@ -316,6 +306,7 @@ class JobConfig:
             service_account=batch_v1.ServiceAccount(
                 email=get_service_account_email(),
             ),
+            **kwargs,
         )
 
     @classmethod
@@ -413,8 +404,7 @@ class Job:
             job=config.job,
         )
         job = cls._client().create_job(req)
-        obj = cls(job.name, job)
-        return obj
+        return cls(job)
 
     @classmethod
     def list(cls, *, region: str) -> list[Job]:
@@ -422,9 +412,9 @@ class Job:
             parent=f'projects/{get_project_id()}/locations/{region}'
         )
         jobs = cls._client().list_jobs(request=req)
-        return [cls(j.name, j) for j in jobs]
+        return [cls(j) for j in jobs]
 
-    def __init__(self, name: str, job: batch_v1.Job | None = None):
+    def __init__(self, name: str | batch_v1.Job):
         """
         `name` is like 'projects/<project-id>/locations/<location>/jobs/<name>'.
         This can also be considered the job "ID" or "URI".
@@ -433,8 +423,12 @@ class Job:
         `job` is not needed because it can be created if needed.
         It is accepted in case you already have it. See :meth:`create`, :meth:`list`.
         """
-        self._name = name
-        self._job: batch_v1.Job = job
+        if isinstance(name, str):
+            self._name = name
+            self._job = None
+        else:
+            self._name = name.name
+            self._job = name
 
     @property
     def name(self) -> str:

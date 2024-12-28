@@ -8,6 +8,7 @@ from google.cloud import workflows_v1
 from google.cloud.workflows import executions_v1
 
 from .auth import get_credentials, get_project_id
+from .batch import JobConfig as BatchJobConfig
 
 
 class Step:
@@ -115,6 +116,8 @@ class WaitStep(Step):
                 },
             ]
         }
+        # TODO: the `log` step may not be very useful.
+        # TODO: how happens after the `raise`?
         super().__init__(name, content)
 
 
@@ -123,24 +126,42 @@ class ParallelStep(Step):
 
 
 class BatchStep(Step):
-    pass
+    def __init__(self, name: str, config: BatchJobConfig):
+        # If you want Workflows to wait for this batch job to finish, add a :meth:`WaitStep` after this,
+        # using `self.job_url` as the argument `job_url` to `WaitStep`.
+        api_url = f'https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{config.region}/jobs'
+        job_config = json.loads(type(config.job).to_json(config.job))
+        content = {
+            'call': 'http.post',
+            'args': {
+                'url': api_url,
+                'query': {'job_id': f'${{"{name}"}}'},
+                'headers': {'Content-Type': 'application/json'},
+                'auth': {'type': 'OAuth2'},
+                'body': job_config,
+            },
+            'result': f"{name}_result",
+        }
+        super().__init__(name, content)
+        self.job_url = f"{api_url}/{name}"
 
 
 class Execution:
-    @classmethod
-    def _execution_client(cls):
-        return workflows_v1.ExecutionsClient(credentials=get_credentials())
-
-    def __init__(self, execution: executions_v1.Execution):
-        self._execution = execution
+    def __init__(self, name: str | executions_v1.Execution):
+        if isinstance(name, str):
+            self._name = name
+            self._execution = None
+        else:
+            self._name = name.name
+            self._execution = name
 
     @property
     def name(self):
-        return self._execution.name
+        return self._name
 
     def _refresh(self):
         req = executions_v1.GetExecutionRequest(name=self.name)
-        self._execution = self._execution_client().get_execution(req)
+        self._execution = Workflow._execution_client().get_execution(req)
 
     def result(self):
         self._refresh()
@@ -190,15 +211,22 @@ class Workflow:
         )
         op = cls._workflow_client().create_workflow(req)
         resp = op.result()
-        obj = cls(resp.name, resp)
-        return obj
+        return cls(resp)
 
-    def __init__(self, name: str, workflow: workflows_v1.Workflow | None = None):
+    def __init__(self, name: str | workflows_v1.Workflow):
         """
         `name` is like "projects/<project_id>/locations/<region>/workflows/<name>".
         """
-        self._name = name
-        self._workflow = workflow
+        if isinstance(name, str):
+            self._name = name
+            self._workflow = None
+        else:
+            self._name = name.name
+            self._workflow = name
+
+    @property
+    def name(self) -> str:
+        return self.name
 
     def _refresh(self):
         req = workflows_v1.GetWorkflowRequest(name=self._name)
@@ -216,3 +244,8 @@ class Workflow:
     def delete(self) -> None:
         req = workflows_v1.DeleteWorkflowRequest(name=self._name)
         self._workflow_client().delete_workflow(req)
+
+    def list_executions(self) -> list[Execution]:
+        req = executions_v1.ListExecutionsRequest(parent=self.name)
+        resp = self._execution_client().list_executions(req)
+        return [Execution(r) for r in resp]
