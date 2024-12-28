@@ -9,9 +9,9 @@ from __future__ import annotations
 __all__ = ['Job', 'JobConfig']
 
 import os
+import string
 import time
 from typing import Literal
-import string
 
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
@@ -21,18 +21,17 @@ from cloudly.util.logging import get_calling_file
 from .auth import get_credentials, get_project_id, get_service_account_email
 
 
-
 def validate_label_key(val: str) -> str:
     if len(val) < 1 or len(val) > 63:
         raise ValueError(val)
-    allowed = string.ascii_lowercase + string.digits + '-_' 
+    allowed = string.ascii_lowercase + string.digits + '-_'
     if any(c not in allowed for c in val):
         raise ValueError(val)
     if val[0] not in string.ascii_lowercase:
         raise ValueError(val)
     return val
 
-        
+
 def validate_label_value(val: str, *, fix: bool = False) -> str:
     val0 = val
     if fix:
@@ -44,7 +43,7 @@ def validate_label_value(val: str, *, fix: bool = False) -> str:
 
     if len(val) > 63:
         raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
-    allowed = string.ascii_lowercase + string.digits + '-_' 
+    allowed = string.ascii_lowercase + string.digits + '-_'
     if any(c not in allowed for c in val):
         raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
     return val
@@ -330,7 +329,10 @@ class JobConfig:
             'created-by-function': caller.function,
             **kwargs,
         }
-        zz = {validate_label_key(k): validate_label_value(v, fix=True) for k, v in zz.items()}
+        zz = {
+            validate_label_key(k): validate_label_value(v, fix=True)
+            for k, v in zz.items()
+        }
         return zz
 
     def __init__(
