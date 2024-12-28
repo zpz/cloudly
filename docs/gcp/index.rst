@@ -12,6 +12,10 @@ Utilities for Google Cloud Platform (GCP)
 
    auth
    batch
+   compute
    logging
+   scheduler
    secretmanager
    storage
+   workflows
+

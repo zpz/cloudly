@@ -19,34 +19,7 @@ from google.protobuf.duration_pb2 import Duration
 from cloudly.util.logging import get_calling_file
 
 from .auth import get_credentials, get_project_id, get_service_account_email
-
-
-def validate_label_key(val: str) -> str:
-    if len(val) < 1 or len(val) > 63:
-        raise ValueError(val)
-    allowed = string.ascii_lowercase + string.digits + '-_'
-    if any(c not in allowed for c in val):
-        raise ValueError(val)
-    if val[0] not in string.ascii_lowercase:
-        raise ValueError(val)
-    return val
-
-
-def validate_label_value(val: str, *, fix: bool = False) -> str:
-    val0 = val
-    if fix:
-        val = val.strip('- ').lower()
-        for a in ('<', '>', ' ', '_', '.', ','):
-            val = val.replace(a, '-')
-        val = val.replace('/', '--')
-        val = val.strip(' -')
-
-    if len(val) > 63:
-        raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
-    allowed = string.ascii_lowercase + string.digits + '-_'
-    if any(c not in allowed for c in val):
-        raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
-    return val
+from .compute import validate_label_key, validate_label_value, basic_resource_labels
 
 
 class Container:
@@ -313,13 +286,7 @@ class JobConfig:
     def labels(cls, **kwargs) -> dict[str, str]:
         # There are some restrictions to the label values.
         # See https://cloud.google.com/batch/docs/organize-resources-using-labels
-        caller = get_calling_file()
-        zz = {
-            'created-by-file': os.path.abspath(caller.filename),
-            'created-by-line': str(caller.lineno),
-            'created-by-function': caller.function,
-            **kwargs,
-        }
+        zz = {**basic_resource_labels(), **kwargs}
         zz = {
             validate_label_key(k): validate_label_value(v, fix=True)
             for k, v in zz.items()
@@ -414,7 +381,7 @@ class Job:
         jobs = cls._client().list_jobs(request=req)
         return [cls(j) for j in jobs]
 
-    def __init__(self, name: str | batch_v1.Job):
+    def __init__(self, name: str | batch_v1.Job, /):
         """
         `name` is like 'projects/<project-id>/locations/<location>/jobs/<name>'.
         This can also be considered the job "ID" or "URI".
@@ -446,10 +413,7 @@ class Job:
         self._refresh()
         return self._job.status
 
-    def state(self) -> str:
-        """
-        Return string values like 'STATE_UNSPECIFIED', 'QUEUED', 'SCHEDULED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'DELETION_IN_PROGRESS'.
-        """
+    def state(self) -> Literal['STATE_UNSPECIFIED', 'QUEUED', 'SCHEDULED', 'RUNNING', 'SUCCEEDED', 'FAILED', 'DELETION_IN_PROGRESS']:
         return self.status().state.name
 
     def wait(self, *, sleep_interval: int = 10, timeout: int | None = None) -> str:

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+__all__ = ['Workflow', 'Execution', 'Step', 'WaitStep', 'BatchStep']
+
 import json
 import uuid
 from collections.abc import Sequence
@@ -196,6 +198,10 @@ class Workflow:
     ) -> Workflow:
         """
         `name` needs to be unique, hence it's recommended to construct it with some randomness.
+
+        If you create a workflow for a, say, batch job, then you probably should get `region`
+        from the batch job definition. I don't know whether it's allowed for a workflow to
+        contain jobs spanning regions.
         """
         content = {}
         if param_names:
@@ -213,7 +219,7 @@ class Workflow:
         resp = op.result()
         return cls(resp)
 
-    def __init__(self, name: str | workflows_v1.Workflow):
+    def __init__(self, name: str | workflows_v1.Workflow, /):
         """
         `name` is like "projects/<project_id>/locations/<region>/workflows/<name>".
         """
@@ -227,6 +233,10 @@ class Workflow:
     @property
     def name(self) -> str:
         return self.name
+
+    @property
+    def region(self) -> str:
+        return self.name.split('locations/')[1].split('/')[0]
 
     def _refresh(self):
         req = workflows_v1.GetWorkflowRequest(name=self._name)
