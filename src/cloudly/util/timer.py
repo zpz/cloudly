@@ -81,4 +81,4 @@ class timer:
             self._print_func(f'... "{self._name}" finished')
             self._print_func(f'"{self._name}" took {dur} to finish')
         else:
-            self._print_func(f'took {dur}')
+            self._print_func(f'... took {dur}')
