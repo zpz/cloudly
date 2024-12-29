@@ -18,7 +18,6 @@ from .auth import get_credentials, get_project_id, get_service_account_email
 from .compute import basic_resource_labels, validate_label_key, validate_label_value
 
 
-
 class TaskConfig:
     class Container:
         def __init__(
@@ -87,7 +86,6 @@ class TaskConfig:
         @property
         def container(self) -> batch_v1.Runnable.Container:
             return self._container
-
 
     def __init__(
         self,
@@ -169,8 +167,6 @@ class JobConfig:
                 mount_path=self.mount_path,
                 mount_options=opts,
             )
-
-
 
     class GPU:
         def __init__(self, *, gpu_type: str, gpu_count: int):

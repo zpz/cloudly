@@ -225,7 +225,9 @@ class Workflow:
 
     @classmethod
     def list(cls, region: str) -> list[Workflow]:
-        req = workflows_v1.ListWorkflowsRequest(parent=f"projects/{get_project_id()}/locations/{region}")
+        req = workflows_v1.ListWorkflowsRequest(
+            parent=f'projects/{get_project_id()}/locations/{region}'
+        )
         resp = cls._workflow_client().list_workflows(req)
         return [cls(r) for r in resp]
 

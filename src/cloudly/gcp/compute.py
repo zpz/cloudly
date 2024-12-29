@@ -14,7 +14,6 @@ from cloudly.util.logging import get_calling_file
 from .auth import get_credentials, get_project_id, get_service_account_email
 
 
-    
 def validate_label_key(val: str) -> str:
     if len(val) < 1 or len(val) > 63:
         raise ValueError(val)
@@ -54,9 +53,14 @@ def basic_resource_labels():
 
 class InstanceConfig:
     class BootDisk:
-        def __init__(self, *, disk_size_gb: int | None = None, source_image: str | None = None):
+        def __init__(
+            self, *, disk_size_gb: int | None = None, source_image: str | None = None
+        ):
             self._disk_size_gb = disk_size_gb or 100
-            self._source_image = source_image or 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
+            self._source_image = (
+                source_image
+                or 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
+            )
 
         @property
         def attached_disk(self) -> compute_v1.AttachedDisk:
@@ -68,7 +72,6 @@ class InstanceConfig:
                 ),
                 disk_size_gb=self._disk_size_gb,
             )
-
 
     class LocalSSD:
         def __init__(self, *, disk_size_gb: int):
