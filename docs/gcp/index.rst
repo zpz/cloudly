@@ -11,6 +11,11 @@ Utilities for Google Cloud Platform (GCP)
    :maxdepth: 1
 
    auth
+   batch
+   compute
    logging
+   scheduler
    secretmanager
    storage
+   workflows
+

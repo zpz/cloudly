@@ -59,9 +59,23 @@ def gcp_handler(
     return handler
 
 
-def add_gcp_handler(name, *, labels=None, **kwargs) -> logging.Handler:
+def add_gcp_handler(
+    name,
+    *,
+    labels=None,
+    with_datetime=False,
+    with_timezone=False,
+    with_level=False,
+    **kwargs,
+) -> logging.Handler:
     h = gcp_handler(name=name, labels=labels, **kwargs)
-    h.setFormatter(DynamicFormatter())
+    h.setFormatter(
+        DynamicFormatter(
+            with_datetime=with_datetime,
+            with_timezone=with_timezone,
+            with_level=with_level,
+        )
+    )
     rootlogger.addHandler(h)
     return h
 

@@ -32,8 +32,11 @@ from abc import ABC, abstractmethod
 from io import UnsupportedOperation
 from typing import Any
 
-from cloudly.upathlib import BlobUpath, LocalUpath, Upath
 from cloudly.util.datetime import utcnow
+
+from ._blob import BlobUpath
+from ._local import LocalUpath
+from ._upath import Upath
 
 logger = logging.getLogger(__name__)
 
