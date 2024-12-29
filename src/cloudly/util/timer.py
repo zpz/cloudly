@@ -64,6 +64,7 @@ class timer:
         def decorated(*args, **kwargs):
             if not self._name:
                 self._name = f"function '{f.__name__}'"
+                # TODO: also include package.module?
             with self:
                 z = f(*args, **kwargs)
             return z
