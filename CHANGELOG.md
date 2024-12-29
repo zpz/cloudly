@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - New module `cloudly.gcp.compute`.
 - New moudle `cloudly.gcp.scheduler`.
 - New module `cloudly.gcp.workflows`.
+- New module `cloudly.util.timer`.
 
 
 ## [0.2.3] - 2024-12-22
