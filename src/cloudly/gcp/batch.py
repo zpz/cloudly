@@ -18,128 +18,75 @@ from .auth import get_credentials, get_project_id, get_service_account_email
 from .compute import basic_resource_labels, validate_label_key, validate_label_value
 
 
-class Container:
-    def __init__(
-        self,
-        *,
-        image_uri: str,
-        commands: str,
-        options: str | None = None,
-        local_ssd_disk: LocalSSD | None = None,
-        disk_mount_path: str = None,
-        gpu: GPU | None = None,
-        **kwargs,
-    ):
-        """
-        Parameters
-        ----------
-        image_uri
-            The full tag of the image.
-        commands
-            The commands to be run within the Docker container, such as 'python -m mypackage.mymodule --arg1 x --arg2 y'.
-
-            This is the command you would run if you are within the container.
-        options
-            The option string to be applied to `docker run`, such as '-e NAME=abc --network host'. As this example shows,
-            environment variables that you want to be passed into the container are also handled by `options`.
-        """
-        if not commands.startswith('-c '):
-            commands = '-c ' + commands
-
-        if gpu:
-            if options:
-                if '--runtime=nvidia' not in options:
-                    options = options + ' --runtime=nvidia'
-            else:
-                options = '--runtime=nvidia'
-
-        if options:
-            if '--log-driver ' not in options and '--log-driver=' not in options:
-                options += ' --log-driver=gcplogs'
-        else:
-            options = '--log-driver=gcplogs'
-        # TODO: is this necessary? is this enough by itself?
-
-        if local_ssd_disk is not None:
-            volumes = [
-                f'{local_ssd_disk.mount_path}:{disk_mount_path or local_ssd_disk.mount_path}:{local_ssd_disk.access_mode}'
-            ]
-        else:
-            volumes = None
-
-        self._container = batch_v1.Runnable.Container(
-            image_uri=image_uri,
-            commands=[commands],
-            options=options,
-            entrypoint='/bin/bash',
-            volumes=volumes,
-            **kwargs,
-        )
-
-    @property
-    def container(self) -> batch_v1.Runnable.Container:
-        return self._container
-
-
-class LocalSSD:
-    """
-    Local SSDs are attached to each worker node for use during the lifetime of the tasks.
-    They are not "persistent" storage that lives beyond the batch job.
-    """
-
-    def __init__(
-        self,
-        *,
-        disk_size_gb: int,
-        device_name: str | None = None,
-        mount_path: str | None = None,
-        access_mode: Literal['ro', 'rw'] | None = None,
-    ):
-        assert disk_size_gb >= 10, disk_size_gb
-        self.disk_size_gb = disk_size_gb
-        self.device_name = device_name or 'local-ssd'
-        self.mount_path = mount_path or '/mnt'
-        self.access_mode = access_mode or 'rw'
-
-    @property
-    def attached_disk(self) -> batch_v1.AllocationPolicy.AttachedDisk:
-        return batch_v1.AllocationPolicy.AttachedDisk(
-            new_disk=batch_v1.AllocationPolicy.Disk(
-                type_='local-ssd', size_gb=self.disk_size_gb
-            ),
-            device_name=self.device_name,
-        )
-
-    @property
-    def volume(self) -> batch_v1.Volume:
-        opts = ['async', self.access_mode]
-        if self.access_mode == 'ro':
-            opts.append('noload')
-        return batch_v1.Volume(
-            device_name=self.device_name,
-            mount_path=self.mount_path,
-            mount_options=opts,
-        )
-
-
-class GPU:
-    def __init__(self, *, gpu_type: str, gpu_count: int):
-        """
-        `gpu_type`: values like 'nvidia-tesla-t4', 'nvidia-tesla-v100', etc.
-        """
-        assert gpu_type
-        assert gpu_count
-        self.gpu_type = gpu_type
-        self.gpu_count = gpu_count
-
-    @property
-    def accelerator(self) -> batch_v1.AllocationPolicy.Accelerator:
-        return batch_v1.AllocationPolicy.Accelerator(
-            type_=self.gpu_type, count=self.gpu_count
-        )
-
-
 class TaskConfig:
+    class Container:
+        def __init__(
+            self,
+            *,
+            image_uri: str,
+            commands: str,
+            options: str | None = None,
+            local_ssd_disk: JobConfig.LocalSSD | None = None,
+            disk_mount_path: str = None,
+            gpu: JobConfig.GPU | None = None,
+            **kwargs,
+        ):
+            """
+            Parameters
+            ----------
+            image_uri
+                The full tag of the image.
+            commands
+                The commands to be run within the Docker container, such as 'python -m mypackage.mymodule --arg1 x --arg2 y'.
+
+                This is the command you would run if you are within the container.
+            options
+                The option string to be applied to `docker run`, such as '-e NAME=abc --network host'. As this example shows,
+                environment variables that you want to be passed into the container are also handled by `options`.
+            """
+            if not commands.startswith('-c '):
+                commands = '-c ' + commands
+
+            if options:
+                options = ' ' + options.strip() + ' '  # to help search in it
+            else:
+                options = ''
+            if ' --rm ' not in options:
+                options += ' --rm '
+            if ' --init ' not in options:
+                options += '--init '
+
+            if gpu:
+                if ' --runtime=nvidia ' not in options:
+                    options = options + '--runtime=nvidia '
+
+            if ' --log-driver ' not in options and ' --log-driver=' not in options:
+                options += '--log-driver=gcplogs '
+            # TODO: is this necessary? is this enough by itself?
+
+            if local_ssd_disk is not None:
+                volumes = [
+                    f'{local_ssd_disk.mount_path}:{disk_mount_path or local_ssd_disk.mount_path}:{local_ssd_disk.access_mode}'
+                ]
+            else:
+                volumes = None
+
+            options = options.strip()
+            if not options:
+                options = None
+            self._container = batch_v1.Runnable.Container(
+                image_uri=image_uri,
+                commands=[commands],
+                options=options,
+                entrypoint='/bin/bash',
+                volumes=volumes,
+                **kwargs,
+            )
+
+        @property
+        def container(self) -> batch_v1.Runnable.Container:
+            return self._container
+
     def __init__(
         self,
         *,
@@ -148,14 +95,14 @@ class TaskConfig:
         max_retry_count: int | None = None,
         ignore_exit_status: bool | None = None,
         always_run: bool | None = None,
-        local_ssd_disk: LocalSSD | None = None,
+        local_ssd_disk: JobConfig.LocalSSD | None = None,
         **kwargs,
     ):
         if ignore_exit_status is None:
             ignore_exit_status = False
         if always_run is None:
             always_run = False
-        container = Container(**container, local_ssd_disk=local_ssd_disk)
+        container = self.Container(**container, local_ssd_disk=local_ssd_disk)
         runnable = batch_v1.Runnable(
             container=container.container,
             ignore_exit_status=ignore_exit_status,
@@ -181,6 +128,62 @@ class TaskConfig:
 
 
 class JobConfig:
+    class LocalSSD:
+        """
+        Local SSDs are attached to each worker node for use during the lifetime of the tasks.
+        They are not "persistent" storage that lives beyond the batch job.
+        """
+
+        def __init__(
+            self,
+            *,
+            disk_size_gb: int,
+            device_name: str | None = None,
+            mount_path: str | None = None,
+            access_mode: Literal['ro', 'rw'] | None = None,
+        ):
+            assert disk_size_gb >= 10, disk_size_gb
+            self.disk_size_gb = disk_size_gb
+            self.device_name = device_name or 'local-ssd'
+            self.mount_path = mount_path or '/mnt'
+            self.access_mode = access_mode or 'rw'
+
+        @property
+        def attached_disk(self) -> batch_v1.AllocationPolicy.AttachedDisk:
+            return batch_v1.AllocationPolicy.AttachedDisk(
+                new_disk=batch_v1.AllocationPolicy.Disk(
+                    type_='local-ssd', size_gb=self.disk_size_gb
+                ),
+                device_name=self.device_name,
+            )
+
+        @property
+        def volume(self) -> batch_v1.Volume:
+            opts = ['async', self.access_mode]
+            if self.access_mode == 'ro':
+                opts.append('noload')
+            return batch_v1.Volume(
+                device_name=self.device_name,
+                mount_path=self.mount_path,
+                mount_options=opts,
+            )
+
+    class GPU:
+        def __init__(self, *, gpu_type: str, gpu_count: int):
+            """
+            `gpu_type`: values like 'nvidia-tesla-t4', 'nvidia-tesla-v100', etc.
+            """
+            assert gpu_type
+            assert gpu_count
+            self.gpu_type = gpu_type
+            self.gpu_count = gpu_count
+
+        @property
+        def accelerator(self) -> batch_v1.AllocationPolicy.Accelerator:
+            return batch_v1.AllocationPolicy.Accelerator(
+                type_=self.gpu_type, count=self.gpu_count
+            )
+
     @classmethod
     def task_group(
         cls,
@@ -301,12 +304,12 @@ class JobConfig:
         **kwargs,
     ):
         if gpu:
-            gpu = GPU(**gpu)
+            gpu = self.GPU(**gpu)
             assert 'gpu' not in task_group['task_spec']['container']
             task_group['task_spec']['container']['gpu'] = gpu
 
         if local_ssd:
-            local_ssd_disk = LocalSSD(**local_ssd)
+            local_ssd_disk = self.LocalSSD(**local_ssd)
             assert 'local_ssd_disk' not in task_group['task_spec']
             task_group['task_spec']['local_ssd_disk'] = local_ssd_disk
         else:
@@ -338,10 +341,6 @@ class JobConfig:
     @property
     def region(self) -> str:
         return self._job.allocation_policy.location.allowed_locations[0].split('/')[1]
-
-    # @property
-    # def api_url(self) -> str:
-    #     return f'https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{self.region}'
 
 
 class Job:

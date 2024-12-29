@@ -5,6 +5,7 @@ __all__ = ['Workflow', 'Execution', 'Step', 'WaitStep', 'BatchStep']
 import json
 import uuid
 from collections.abc import Sequence
+from typing import Literal
 
 from google.cloud import workflows_v1
 from google.cloud.workflows import executions_v1
@@ -169,11 +170,17 @@ class Execution:
         self._refresh()
         return str(self._execution.result)
 
-    @property
-    def state(self) -> str:
-        """
-        Returned value is like "ACTIVE", "FAILED", CANCELLED", etc.
-        """
+    def state(
+        self,
+    ) -> Literal[
+        'STATE_UNSPECIFIED',
+        'ACTIVE',
+        'SUCCEEDED',
+        'FAILED',
+        'CANCELLED',
+        'UNAVAILABLE',
+        'QUEUED',
+    ]:
         self._refresh()
         return self._execution.state.name
 
@@ -185,7 +192,7 @@ class Workflow:
 
     @classmethod
     def _execution_client(cls):
-        return workflows_v1.ExecutionsClient(credentials=get_credentials())
+        return executions_v1.ExecutionsClient(credentials=get_credentials())
 
     @classmethod
     def create(
@@ -194,7 +201,7 @@ class Workflow:
         steps: Sequence[Step],
         *,
         region: str,
-        param_names: Sequence[str] | None = None,
+        args_name: str = None,
     ) -> Workflow:
         """
         `name` needs to be unique, hence it's recommended to construct it with some randomness.
@@ -202,11 +209,16 @@ class Workflow:
         If you create a workflow for a, say, batch job, then you probably should get `region`
         from the batch job definition. I don't know whether it's allowed for a workflow to
         contain jobs spanning regions.
+
+        If your workflow requires command-line arguments, you should specify a single name for them,
+        and access individual arguments using `dot`, for example, "args.name", "args.age", etc, where
+        `args_name` is "args". Correspondingly in :meth:`execute`, you need to pass a dict to `args`,
+        e.g. `{'name': 'Tom', 'age': 38}`.
         """
-        content = {}
-        if param_names:
-            content['params'] = list(param_names)
-        content['steps'] = [s.render() for s in steps]
+        content = {'main': {}}
+        if args_name:
+            content['main']['params'] = [args_name]
+        content['main']['steps'] = [s.render() for s in steps]
         content = json.dumps(content)
 
         workflow = workflows_v1.Workflow(source_contents=content)
@@ -218,6 +230,14 @@ class Workflow:
         op = cls._workflow_client().create_workflow(req)
         resp = op.result()
         return cls(resp)
+
+    @classmethod
+    def list(cls, region: str) -> list[Workflow]:
+        req = workflows_v1.ListWorkflowsRequest(
+            parent=f'projects/{get_project_id()}/locations/{region}'
+        )
+        resp = cls._workflow_client().list_workflows(req)
+        return [cls(r) for r in resp]
 
     def __init__(self, name: str | workflows_v1.Workflow, /):
         """
@@ -232,7 +252,7 @@ class Workflow:
 
     @property
     def name(self) -> str:
-        return self.name
+        return self._name
 
     @property
     def region(self) -> str:
@@ -241,6 +261,10 @@ class Workflow:
     def _refresh(self):
         req = workflows_v1.GetWorkflowRequest(name=self._name)
         self._workflow = self._workflow_client().get_workflow(req)
+
+    def state(self) -> Literal['STATE_UNSPECIFIED', 'ACTIVE', 'UNAVAILABLE']:
+        self._refresh()
+        return self._workflow.state.name
 
     def execute(self, args: dict | None = None) -> Execution:
         if args:

@@ -1,22 +1,18 @@
 from __future__ import annotations
 
-__all__ = ['Instance']
+__all__ = ['Instance', 'InstanceConfig']
 
 
 import os
 import string
+import warnings
 from typing import Literal
 
-import google.api_core.exceptions
 from google.cloud import compute_v1
 
 from cloudly.util.logging import get_calling_file
 
 from .auth import get_credentials, get_project_id, get_service_account_email
-
-
-class InstanceNotFoundError(Exception):
-    pass
 
 
 def validate_label_key(val: str) -> str:
@@ -40,7 +36,10 @@ def validate_label_value(val: str, *, fix: bool = False) -> str:
         val = val.strip(' -')
 
     if len(val) > 63:
-        raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
+        val = val[-63:].lstrip('-_')
+        warnings.warn(
+            f"long value was truncated; original value '{val0}' was changed to '{val}"
+        )
     allowed = string.ascii_lowercase + string.digits + '-_'
     if any(c not in allowed for c in val):
         raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
@@ -57,6 +56,45 @@ def basic_resource_labels():
 
 
 class InstanceConfig:
+    class BootDisk:
+        def __init__(
+            self, *, disk_size_gb: int | None = None, source_image: str | None = None
+        ):
+            self._disk_size_gb = disk_size_gb or 100
+            self._source_image = (
+                source_image
+                or 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
+            )
+
+        @property
+        def attached_disk(self) -> compute_v1.AttachedDisk:
+            return compute_v1.AttachedDisk(
+                boot=True,
+                auto_delete=True,
+                initialize_params=compute_v1.AttachedDiskInitializeParams(
+                    source_image=self._source_image,
+                ),
+                disk_size_gb=self._disk_size_gb,
+            )
+
+    class LocalSSD:
+        def __init__(self, *, disk_size_gb: int):
+            assert disk_size_gb >= 10
+            self._disk_size_gb = disk_size_gb
+            self._zone = None  # assigned separately after initialization
+
+        @property
+        def attached_disk(self) -> compute_v1.AttachedDisk:
+            return compute_v1.AttachedDisk(
+                type_=compute_v1.AttachedDisk.Type.SCRATCH.name,
+                interface='NVME',
+                disk_size_gb=self._disk_size_gb,
+                initialize_params=compute_v1.AttachedDiskInitializeParams(
+                    disk_type=f'zones/{self._zone}/diskTypes/local-ssd',
+                ),
+                auto_delete=True,
+            )
+
     def __init__(
         self,
         *,
@@ -64,7 +102,8 @@ class InstanceConfig:
         zone: str,
         machine_type: str,
         labels: dict[str, str] | None = None,
-        local_ssd_size_gb: int | None = None,
+        boot_disk: dict | None = None,
+        local_ssd: dict | None = None,
         network_uri: str,
         subnet_uri: str,
         startup_script: str | None = None,
@@ -87,20 +126,14 @@ class InstanceConfig:
             validate_label_key(k): validate_label_value(v, fix=True)
             for k, v in labels.items()
         }
+
         disks = []
-        if local_ssd_size_gb:
-            # TODO: accepted range of this value?
-            disks.append(
-                compute_v1.AttachedDisk(
-                    type_=compute_v1.AttachedDisk.Type.SCRATCH.name,
-                    interface='NVME',
-                    disk_size_gb=local_ssd_size_gb,
-                    initialize_params=compute_v1.AttachedDiskInitializeParams(
-                        disk_type=f'zones/{zone}/diskTypes/local-ssd',
-                    ),
-                    auto_delete=True,
-                )
-            )
+        disks.append(self.BootDisk(**(boot_disk or {})).attached_disk)
+        if local_ssd:
+            ssd = self.LocalSSD(**local_ssd)
+            ssd._zone = zone
+            disks.append(ssd.attached_disk)
+
         network = compute_v1.NetworkInterface(
             network=network_uri, subnetwork=subnet_uri
         )
@@ -157,6 +190,7 @@ class Instance:
         )
         op = cls._client().insert(req)
         op.result()
+        # This could raise `google.api_core.exceptions.Forbidden` with message "... QUOTA_EXCEEDED ..."
         return cls(name, zone)
 
     @classmethod
@@ -183,10 +217,8 @@ class Instance:
         req = compute_v1.GetInstanceRequest(
             instance=self._name, project=get_project_id(), zone=self._zone
         )
-        try:
-            self._instance = self._client().get(req)
-        except google.api_core.exceptions.NotFound:
-            raise InstanceNotFoundError(self._name)
+        self._instance = self._client().get(req)
+        # This could raise `google.api_core.exceptions.NotFound`
 
     def delete(self) -> None:
         req = compute_v1.DeleteInstanceRequest(
