@@ -6,6 +6,7 @@ __all__ = ['Instance', 'InstanceConfig']
 import os
 import string
 from typing import Literal
+import warnings
 
 from google.cloud import compute_v1
 
@@ -35,7 +36,8 @@ def validate_label_value(val: str, *, fix: bool = False) -> str:
         val = val.strip(' -')
 
     if len(val) > 63:
-        raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
+        val = val[-63:].lstrip('-_')
+        warnings.warn(f"long value was truncated; original value '{val0}' was changed to '{val}")
     allowed = string.ascii_lowercase + string.digits + '-_'
     if any(c not in allowed for c in val):
         raise ValueError(f"original: '{val0}'; after fixes: '{val}'")
