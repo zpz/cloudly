@@ -170,7 +170,17 @@ class Execution:
         self._refresh()
         return str(self._execution.result)
 
-    def state(self) -> Literal['STATE_UNSPECIFIED', 'ACTIVE', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'UNAVAILABLE', 'QUEUED']:
+    def state(
+        self,
+    ) -> Literal[
+        'STATE_UNSPECIFIED',
+        'ACTIVE',
+        'SUCCEEDED',
+        'FAILED',
+        'CANCELLED',
+        'UNAVAILABLE',
+        'QUEUED',
+    ]:
         self._refresh()
         return self._execution.state.name
 
@@ -252,7 +262,7 @@ class Workflow:
         req = workflows_v1.GetWorkflowRequest(name=self._name)
         self._workflow = self._workflow_client().get_workflow(req)
 
-    def state(self) ->Literal['STATE_UNSPECIFIED', 'ACTIVE', 'UNAVAILABLE']:
+    def state(self) -> Literal['STATE_UNSPECIFIED', 'ACTIVE', 'UNAVAILABLE']:
         self._refresh()
         return self._workflow.state.name
 
