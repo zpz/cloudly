@@ -58,39 +58,41 @@ def basic_resource_labels():
 class InstanceConfig:
     class BootDisk:
         def __init__(
-            self, *, disk_size_gb: int | None = None, source_image: str | None = None
+            self, *, size_gb: int | None = None, source_image: str | None = None
         ):
-            self._disk_size_gb = disk_size_gb or 100
-            self._source_image = (
+            if size_gb:
+                assert size_gb >= 30, f"{size_gb} >= 30"
+            self.size_gb = size_gb or 30  # GCP default is 30
+            self.source_image = (
                 source_image
                 or 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
             )
 
         @property
-        def attached_disk(self) -> compute_v1.AttachedDisk:
+        def disk(self) -> compute_v1.AttachedDisk:
             return compute_v1.AttachedDisk(
                 boot=True,
                 auto_delete=True,
                 initialize_params=compute_v1.AttachedDiskInitializeParams(
-                    source_image=self._source_image,
+                    source_image=self.source_image,
                 ),
-                disk_size_gb=self._disk_size_gb,
+                disk_size_gb=self.size_gb,
             )
 
     class LocalSSD:
-        def __init__(self, *, disk_size_gb: int):
-            assert disk_size_gb >= 10
-            self._disk_size_gb = disk_size_gb
-            self._zone = None  # assigned separately after initialization
+        def __init__(self, *, size_gb: int):
+            assert size_gb >= 10
+            self.size_gb = size_gb
+            self.zone = None  # assigned separately after initialization
 
         @property
-        def attached_disk(self) -> compute_v1.AttachedDisk:
+        def disk(self) -> compute_v1.AttachedDisk:
             return compute_v1.AttachedDisk(
                 type_=compute_v1.AttachedDisk.Type.SCRATCH.name,
                 interface='NVME',
-                disk_size_gb=self._disk_size_gb,
+                disk_size_gb=self.size_gb,
                 initialize_params=compute_v1.AttachedDiskInitializeParams(
-                    disk_type=f'zones/{self._zone}/diskTypes/local-ssd',
+                    disk_type=f'zones/{self.zone}/diskTypes/local-ssd',
                 ),
                 auto_delete=True,
             )
@@ -128,11 +130,11 @@ class InstanceConfig:
         }
 
         disks = []
-        disks.append(self.BootDisk(**(boot_disk or {})).attached_disk)
+        disks.append(self.BootDisk(**(boot_disk or {})).disk)
         if local_ssd:
             ssd = self.LocalSSD(**local_ssd)
             ssd._zone = zone
-            disks.append(ssd.attached_disk)
+            disks.append(ssd.disk)
 
         network = compute_v1.NetworkInterface(
             network=network_uri, subnetwork=subnet_uri
