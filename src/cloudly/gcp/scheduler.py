@@ -39,8 +39,8 @@ class Job:
             body = None
         job = scheduler_v1.Job(
             name=f'{parent}/jobs/{name}',
-            cron_schedule=cron_schedule,
-            timezone=timezone,
+            schedule=cron_schedule,
+            time_zone=timezone,
             http_target=scheduler_v1.HttpTarget(
                 uri=f'https://workflowexecutions.googleapis.com/v1/{workflow.name}/executions',
                 http_method=scheduler_v1.HttpMethod(scheduler_v1.HttpMethod.POST),
@@ -61,6 +61,12 @@ class Job:
         else:
             self._name = name.name
             self._job = name
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __str__(self):
+        return self.__repr__()
 
     @property
     def name(self) -> str:

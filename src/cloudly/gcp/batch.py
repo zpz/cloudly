@@ -447,6 +447,12 @@ class Job:
             self._name = name.name
             self._job = name
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __str__(self):
+        return self.__repr__()
+
     @property
     def name(self) -> str:
         return self._name
