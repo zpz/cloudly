@@ -8,7 +8,7 @@ from __future__ import annotations
 
 __all__ = ['Job', 'JobConfig']
 
-import time
+import warnings
 from typing import Literal
 
 from google.cloud import batch_v1
@@ -128,6 +128,30 @@ class TaskConfig:
 
 
 class JobConfig:
+    class BootDisk:
+        # See
+        #   https://cloud.google.com/batch/docs/vm-os-environment-overview
+        def __init__(
+            self,
+            *,
+            size_gb: int,
+            disk_type: Literal['pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard']
+            | None = None,
+            image: str | None = None,
+        ):
+            assert size_gb >= 30
+            self.size_gb = size_gb
+            self.type_ = disk_type or 'pd-balanced'
+            self.image = image or 'batch-cos'
+
+        @property
+        def disk(self) -> batch_v1.AllocationPolicy.Disk:
+            return batch_v1.AllocationPolicy.Disk(
+                image=self.image,
+                type_=self.type_,
+                size_gb=self.size_gb,
+            )
+
     class LocalSSD:
         """
         Local SSDs are attached to each worker node for use during the lifetime of the tasks.
@@ -137,22 +161,43 @@ class JobConfig:
         def __init__(
             self,
             *,
-            disk_size_gb: int,
+            size_gb: int,
             device_name: str | None = None,
             mount_path: str | None = None,
             access_mode: Literal['ro', 'rw'] | None = None,
         ):
-            assert disk_size_gb >= 10, disk_size_gb
-            self.disk_size_gb = disk_size_gb
+            """
+            `size_gb` should be a multiple of 375. If not,
+            the next greater multiple of 375 will be used.
+            """
+            a, b = divmod(size_gb, 375)
+            if 0 < b < 300:
+                # Fail rather than round up a great deal, for visibility.
+                raise ValueError(
+                    f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
+                )
+            elif b:
+                # Round up with a warning.
+                warnings.warn(
+                    f'`size_gb` for LocalSSD is rounded up from {size_gb} to {375 * (a + 1)}'
+                )
+                size_gb = 375 * (a + 1)
+            else:  # b == 0
+                if a == 0:
+                    raise ValueError(
+                        f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
+                    )
+
+            self.size_gb = size_gb
             self.device_name = device_name or 'local-ssd'
             self.mount_path = mount_path or '/mnt'
             self.access_mode = access_mode or 'rw'
 
         @property
-        def attached_disk(self) -> batch_v1.AllocationPolicy.AttachedDisk:
+        def disk(self) -> batch_v1.AllocationPolicy.AttachedDisk:
             return batch_v1.AllocationPolicy.AttachedDisk(
                 new_disk=batch_v1.AllocationPolicy.Disk(
-                    type_='local-ssd', size_gb=self.disk_size_gb
+                    type_='local-ssd', size_gb=self.size_gb
                 ),
                 device_name=self.device_name,
             )
@@ -228,6 +273,7 @@ class JobConfig:
         machine_type: str,
         no_external_ip_address: bool | None = None,
         provisioning_model: Literal['standard', 'spot', 'preemptible'] | None = None,
+        boot_disk: BootDisk | None = None,
         gpu: GPU | None = None,
         local_ssd_disk: LocalSSD | None = None,
         **kwargs,
@@ -260,7 +306,8 @@ class JobConfig:
             machine_type=machine_type,
             accelerators=[gpu.accelerator] if gpu else None,
             provisioning_model=provisioning_model,
-            disks=None if local_ssd_disk is None else [local_ssd_disk.attached_disk],
+            boot_disk=None if boot_disk is None else boot_disk.disk,
+            disks=None if local_ssd_disk is None else [local_ssd_disk.disk],
         )
         instance_policy_template = batch_v1.AllocationPolicy.InstancePolicyOrTemplate(
             policy=instance_policy,
@@ -299,6 +346,7 @@ class JobConfig:
         allocation_policy: dict,
         labels: dict[str, str] | None = None,
         logs_policy: batch_v1.LogsPolicy | None = None,
+        boot_disk: dict | None = None,
         local_ssd: dict | None = None,
         gpu: dict | None = None,
         **kwargs,
@@ -307,6 +355,9 @@ class JobConfig:
             gpu = self.GPU(**gpu)
             assert 'gpu' not in task_group['task_spec']['container']
             task_group['task_spec']['container']['gpu'] = gpu
+
+        if boot_disk:
+            boot_disk = self.BootDisk(**boot_disk)
 
         if local_ssd:
             local_ssd_disk = self.LocalSSD(**local_ssd)
@@ -319,7 +370,11 @@ class JobConfig:
 
         task_group = self.task_group(**task_group)
         allocation_policy = self.allocation_policy(
-            gpu=gpu, local_ssd_disk=local_ssd_disk, labels=labels, **allocation_policy
+            gpu=gpu,
+            boot_disk=boot_disk,
+            local_ssd_disk=local_ssd_disk,
+            labels=labels,
+            **allocation_policy,
         )
         if logs_policy is None:
             logs_policy = batch_v1.LogsPolicy(
@@ -420,17 +475,6 @@ class Job:
         'DELETION_IN_PROGRESS',
     ]:
         return self.status().state.name
-
-    def wait(self, *, sleep_interval: int = 10, timeout: int | None = None) -> str:
-        total_wait = 0
-        while True:
-            s = self.state()
-            if s in ('SUCCEEDED', 'FAILED'):
-                return s
-            time.sleep(sleep_interval)
-            total_wait += sleep_interval
-            if timeout and total_wait >= timeout:
-                raise TimeoutError
 
     def delete(self) -> None:
         req = batch_v1.DeleteJobRequest(name=self.name)
