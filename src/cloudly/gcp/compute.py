@@ -97,6 +97,25 @@ class InstanceConfig:
                 auto_delete=True,
             )
 
+    class GPU:
+        def __init__(self, *, gpu_type: str, gpu_count: int):
+            """
+            `gpu_type`: values like 'nvidia-tesla-t4', 'nvidia-tesla-v100', etc.
+            """
+            assert gpu_type
+            assert gpu_count
+            self.gpu_type = gpu_type
+            self.gpu_count = gpu_count
+            self.zone = None  # to be assigned separately
+
+        @property
+        def accelerator(self) -> compute_v1.AcceleratorConfig:
+            return compute_v1.AcceleratorConfig(
+                    accelerator_count=self.gpu_count,
+                    accelerator_type=f'projects/{get_project_id()}/zones/{self.zone}/acceleratorTypes/{self.gpu_type}',
+                )
+            
+
     def __init__(
         self,
         *,
@@ -109,8 +128,7 @@ class InstanceConfig:
         network_uri: str,
         subnet_uri: str,
         startup_script: str | None = None,
-        gpu_type: str | None = None,
-        gpu_count: int | None = None,
+        gpu: dict | None = None,
     ):
         """
         `network_uri` may look like "projects/shared-vpc-admin/global/networks/vpcnet-shared-prod-01".
@@ -133,7 +151,7 @@ class InstanceConfig:
         disks.append(self.BootDisk(**(boot_disk or {})).disk)
         if local_ssd:
             ssd = self.LocalSSD(**local_ssd)
-            ssd._zone = zone
+            ssd.zone = zone
             disks.append(ssd.disk)
 
         network = compute_v1.NetworkInterface(
@@ -152,13 +170,10 @@ class InstanceConfig:
         ]
         guest_accelerators = None
         scheduling = None
-        if gpu_type and gpu_count:
-            guest_accelerators = [
-                compute_v1.AcceleratorConfig(
-                    accelerator_count=gpu_count,
-                    accelerator_type=f'projects/{get_project_id()}/zones/{zone}/acceleratorTypes/{gpu_type}',
-                )
-            ]
+        if gpu:
+            gpu = self.GPU(**gpu)
+            gpu.zone = zone
+            guest_accelerators = [gpu.accelerator]
             scheduling = compute_v1.Scheduling(on_host_maintenance='TERMINATE')
             # See https://cloud.google.com/compute/docs/instances/setting-vm-host-options
 
@@ -210,6 +225,12 @@ class Instance:
         self._name = name
         self._zone = zone
         self._instance = None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+    
+    def __str__(self):
+        return self.__repr__()
 
     @property
     def name(self) -> str:

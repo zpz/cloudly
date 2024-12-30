@@ -129,24 +129,43 @@ class ParallelStep(Step):
 
 
 class BatchStep(Step):
-    def __init__(self, name: str, config: BatchJobConfig):
-        # If you want Workflows to wait for this batch job to finish, add a :meth:`WaitStep` after this,
-        # using `self.job_url` as the argument `job_url` to `WaitStep`.
+    def __init__(self, name: str, config: BatchJobConfig, *, job_id: str = None, result_name: str = None):
+        """
+        If you want Workflows to wait for this batch job to finish, add a :meth:`WaitStep` after this,
+        using `self.job_url` as the argument `job_url` to `WaitStep`.
+
+        If you want to assign the result to a variable, pass in `result_name`. Usually, you can use
+        `name.replace('-', '_') + '_result'`.
+        """
         api_url = f'https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{config.region}/jobs'
         job_config = json.loads(type(config.job).to_json(config.job))
+        if not job_id:
+            job_id = name.replace('_', '-')
+        else:
+            assert '_' not in job_id, f"'_' not in '{job_id}'"
+
         content = {
             'call': 'http.post',
             'args': {
                 'url': api_url,
-                'query': {'job_id': f'${{"{name}"}}'},
+                'query': {'job_id': job_id},  
                 'headers': {'Content-Type': 'application/json'},
                 'auth': {'type': 'OAuth2'},
                 'body': job_config,
             },
-            'result': f'{name}_result',
         }
+        if result_name:
+            assert '-' not in result_name, f"'-' not in '{result_name}'"
+            content['result'] = result_name
+        # `job_id`` requirement: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$  Note in particular: doesn't allow underscore.
+        # `result` name must be a valid variable (or identifier) name, e.g. it can't contain dash.
+        # Experiments suggested that `job_id` and `result` name do not have fixed relation with the step `name`;
+        # I made changes to both and it still worked.
         super().__init__(name, content)
         self.job_url = f'{api_url}/{name}'
+        self.job_id = job_id
+        self.result_name = result_name
+
 
 
 class Execution:
@@ -157,6 +176,12 @@ class Execution:
         else:
             self._name = name.name
             self._execution = name
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __str__(self):
+        return self.__repr__()
 
     @property
     def name(self):
@@ -249,6 +274,12 @@ class Workflow:
         else:
             self._name = name.name
             self._workflow = name
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+    
+    def __str__(self):
+        return self.__repr__()
 
     @property
     def name(self) -> str:
