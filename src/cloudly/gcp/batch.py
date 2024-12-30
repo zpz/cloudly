@@ -8,9 +8,8 @@ from __future__ import annotations
 
 __all__ = ['Job', 'JobConfig']
 
-import time
-from typing import Literal
 import warnings
+from typing import Literal
 
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
@@ -132,8 +131,14 @@ class JobConfig:
     class BootDisk:
         # See
         #   https://cloud.google.com/batch/docs/vm-os-environment-overview
-        def __init__(self, *, size_gb: int, disk_type: Literal['pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard'] | None = None,
-                     image: str | None = None):
+        def __init__(
+            self,
+            *,
+            size_gb: int,
+            disk_type: Literal['pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard']
+            | None = None,
+            image: str | None = None,
+        ):
             assert size_gb >= 30
             self.size_gb = size_gb
             self.type_ = disk_type or 'pd-balanced'
@@ -168,14 +173,20 @@ class JobConfig:
             a, b = divmod(size_gb, 375)
             if 0 < b < 300:
                 # Fail rather than round up a great deal, for visibility.
-                raise ValueError(f"`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}")
+                raise ValueError(
+                    f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
+                )
             elif b:
                 # Round up with a warning.
-                warnings.warn(f"`size_gb` for LocalSSD is rounded up from {size_gb} to {375 * (a + 1)}")
+                warnings.warn(
+                    f'`size_gb` for LocalSSD is rounded up from {size_gb} to {375 * (a + 1)}'
+                )
                 size_gb = 375 * (a + 1)
             else:  # b == 0
                 if a == 0:
-                    raise ValueError(f"`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}")
+                    raise ValueError(
+                        f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
+                    )
 
             self.size_gb = size_gb
             self.device_name = device_name or 'local-ssd'
@@ -359,7 +370,11 @@ class JobConfig:
 
         task_group = self.task_group(**task_group)
         allocation_policy = self.allocation_policy(
-            gpu=gpu, boot_disk=boot_disk, local_ssd_disk=local_ssd_disk, labels=labels, **allocation_policy
+            gpu=gpu,
+            boot_disk=boot_disk,
+            local_ssd_disk=local_ssd_disk,
+            labels=labels,
+            **allocation_policy,
         )
         if logs_policy is None:
             logs_policy = batch_v1.LogsPolicy(

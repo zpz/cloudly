@@ -61,7 +61,7 @@ class InstanceConfig:
             self, *, size_gb: int | None = None, source_image: str | None = None
         ):
             if size_gb:
-                assert size_gb >= 30, f"{size_gb} >= 30"
+                assert size_gb >= 30, f'{size_gb} >= 30'
             self.size_gb = size_gb or 30  # GCP default is 30
             self.source_image = (
                 source_image
