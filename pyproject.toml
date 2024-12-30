@@ -54,6 +54,10 @@ gcp = [
     "google-cloud-workflows",
     "requests",
 ]
+bigquery = [
+    "google-cloud-bigquery",
+    "google-cloud-bigquery-storage",
+]
 test = [
     "pytest-asyncio",
     "pytest-mock",
