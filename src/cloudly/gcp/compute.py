@@ -111,10 +111,9 @@ class InstanceConfig:
         @property
         def accelerator(self) -> compute_v1.AcceleratorConfig:
             return compute_v1.AcceleratorConfig(
-                    accelerator_count=self.gpu_count,
-                    accelerator_type=f'projects/{get_project_id()}/zones/{self.zone}/acceleratorTypes/{self.gpu_type}',
-                )
-            
+                accelerator_count=self.gpu_count,
+                accelerator_type=f'projects/{get_project_id()}/zones/{self.zone}/acceleratorTypes/{self.gpu_type}',
+            )
 
     def __init__(
         self,
@@ -228,7 +227,7 @@ class Instance:
 
     def __repr__(self):
         return f"{self.__class__.__name__}('{self.name}')"
-    
+
     def __str__(self):
         return self.__repr__()
 

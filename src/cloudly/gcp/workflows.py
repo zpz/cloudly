@@ -129,7 +129,14 @@ class ParallelStep(Step):
 
 
 class BatchStep(Step):
-    def __init__(self, name: str, config: BatchJobConfig, *, job_id: str = None, result_name: str = None):
+    def __init__(
+        self,
+        name: str,
+        config: BatchJobConfig,
+        *,
+        job_id: str = None,
+        result_name: str = None,
+    ):
         """
         If you want Workflows to wait for this batch job to finish, add a :meth:`WaitStep` after this,
         using `self.job_url` as the argument `job_url` to `WaitStep`.
@@ -148,7 +155,7 @@ class BatchStep(Step):
             'call': 'http.post',
             'args': {
                 'url': api_url,
-                'query': {'job_id': job_id},  
+                'query': {'job_id': job_id},
                 'headers': {'Content-Type': 'application/json'},
                 'auth': {'type': 'OAuth2'},
                 'body': job_config,
@@ -165,7 +172,6 @@ class BatchStep(Step):
         self.job_url = f'{api_url}/{name}'
         self.job_id = job_id
         self.result_name = result_name
-
 
 
 class Execution:
@@ -277,7 +283,7 @@ class Workflow:
 
     def __repr__(self):
         return f"{self.__class__.__name__}('{self.name}')"
-    
+
     def __str__(self):
         return self.__repr__()
 
