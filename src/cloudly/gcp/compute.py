@@ -36,7 +36,7 @@ def validate_label_value(val: str, *, fix: bool = False) -> str:
         val = val.strip(' -')
 
     if len(val) > 63:
-        val = val[-63:].lstrip('-_')
+        val = '__' + val[-61:].lstrip('-_')
         warnings.warn(
             f"long value was truncated; original value '{val0}' was changed to '{val}"
         )
