@@ -5,9 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
-## [0.2.4] - in progress
+## [0.2.4] - 2024-12-30
 
 - Move `versioned_uploadable` from `util` to `upathlib`, keeping a reference in `util` for short-term backcompat.
+- Move `ParquetSerializer` from `cloudly.biglist.parquet` to `cloudly.upathlib.serializer`; add methods `read_parquet`, `write_parquet` to `Upath`.
 - Finetune log formatting.
 - New module `cloudly.gcp.batch`.
 - New module `cloudly.gcp.compute`.

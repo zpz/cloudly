@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-__all__ = ['Workflow', 'Execution', 'Step', 'WaitStep', 'BatchStep']
+__all__ = ['Workflow', 'Execution', 'Step', 'BatchStep']
 
+import datetime
 import json
 import uuid
 from collections.abc import Sequence
@@ -56,13 +57,16 @@ class Step:
         self.name = name
         self._content = content
 
-    def render(self) -> dict[str, dict]:
+    @property
+    def content(self) -> dict:
         return {self.name: self._content}
 
 
 class WaitStep(Step):
     """
     Wait for a GCP service such as a Batch job to finish.
+
+    TODO: does not work; fix this.
     """
 
     def __init__(
@@ -129,24 +133,45 @@ class ParallelStep(Step):
 
 
 class BatchStep(Step):
-    def __init__(self, name: str, config: BatchJobConfig):
-        # If you want Workflows to wait for this batch job to finish, add a :meth:`WaitStep` after this,
-        # using `self.job_url` as the argument `job_url` to `WaitStep`.
+    def __init__(
+        self,
+        name: str,
+        config: BatchJobConfig,
+        *,
+        result_name: str = None,
+    ):
+        """
+        If you want Workflows to wait for this batch job to finish, add a :meth:`WaitStep` after this,
+        using `self.job_url` as the argument `job_url` to `WaitStep`.
+
+        If you want to assign the result to a variable, pass in `result_name`. Usually, you can use
+        `name.replace('-', '_') + '_result'`.
+        """
         api_url = f'https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{config.region}/jobs'
         job_config = json.loads(type(config.job).to_json(config.job))
+        job_id = name.replace('_', '-')
+
         content = {
             'call': 'http.post',
             'args': {
                 'url': api_url,
-                'query': {'job_id': f'${{"{name}"}}'},
+                'query': {'job_id': job_id},
                 'headers': {'Content-Type': 'application/json'},
                 'auth': {'type': 'OAuth2'},
                 'body': job_config,
             },
-            'result': f'{name}_result',
         }
+        if result_name:
+            assert '-' not in result_name, f"'-' not in '{result_name}'"
+            content['result'] = result_name
+        # `job_id`` requirement: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$  Note in particular: doesn't allow underscore.
+        # `result` name must be a valid variable (or identifier) name, e.g. it can't contain dash.
+        # Experiments suggested that `job_id` and `result` name do not have fixed relation with the step `name`;
+        # I made changes to both and it still worked.
         super().__init__(name, content)
-        self.job_url = f'{api_url}/{name}'
+        self.job_url = f'{api_url}/{job_id}'
+        self.job_id = job_id
+        self.result_name = result_name
 
 
 class Execution:
@@ -158,17 +183,46 @@ class Execution:
             self._name = name.name
             self._execution = name
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __str__(self):
+        return self.__repr__()
+
     @property
     def name(self):
         return self._name
 
     def _refresh(self):
         req = executions_v1.GetExecutionRequest(name=self.name)
-        self._execution = Workflow._execution_client().get_execution(req)
+        self._execution = Workflow._call_execution_client('get_execution', req)
+
+    @property
+    def start_time(self) -> datetime.datetime:
+        if self._execution is None:
+            self._refresh()
+        return self._execution.start_time
+
+    @property
+    def end_time(self) -> datetime.datetime:
+        # If not finished (`state()` returns "ACTIVE"), this returns `None`.
+        self._refresh()
+        return self._execution.end_time
+
+    @property
+    def argument(self):
+        if self._execution is None:
+            self._refresh()
+        return self._execution.argument
 
     def result(self):
         self._refresh()
         return str(self._execution.result)
+
+    def status(self):
+        # If still running, this returns which step is currently running.
+        self._refresh()
+        return self._execution.status
 
     def state(
         self,
@@ -184,6 +238,10 @@ class Execution:
         self._refresh()
         return self._execution.state.name
 
+    def cancel(self):
+        req = executions_v1.CancelExecutionRequest(name=self.name)
+        Workflow._call_execution_client('cancel_execution', req)
+
 
 class Workflow:
     @classmethod
@@ -191,8 +249,18 @@ class Workflow:
         return workflows_v1.WorkflowsClient(credentials=get_credentials())
 
     @classmethod
+    def _call_workflow_client(cls, method: str, *args, **kwargs):
+        with cls._workflow_client() as client:
+            return getattr(client, method)(*args, **kwargs)
+
+    @classmethod
     def _execution_client(cls):
         return executions_v1.ExecutionsClient(credentials=get_credentials())
+
+    @classmethod
+    def _call_execution_client(cls, method: str, *args, **kwargs):
+        with cls._execution_client() as client:
+            return getattr(client, method)(*args, **kwargs)
 
     @classmethod
     def create(
@@ -218,7 +286,7 @@ class Workflow:
         content = {'main': {}}
         if args_name:
             content['main']['params'] = [args_name]
-        content['main']['steps'] = [s.render() for s in steps]
+        content['main']['steps'] = [s.content for s in steps]
         content = json.dumps(content)
 
         workflow = workflows_v1.Workflow(source_contents=content)
@@ -227,7 +295,7 @@ class Workflow:
             workflow=workflow,
             workflow_id=name,
         )
-        op = cls._workflow_client().create_workflow(req)
+        op = cls._call_workflow_client('create_workflow', req)
         resp = op.result()
         return cls(resp)
 
@@ -236,7 +304,7 @@ class Workflow:
         req = workflows_v1.ListWorkflowsRequest(
             parent=f'projects/{get_project_id()}/locations/{region}'
         )
-        resp = cls._workflow_client().list_workflows(req)
+        resp = cls._call_workflow_client('list_workflows', req)
         return [cls(r) for r in resp]
 
     def __init__(self, name: str | workflows_v1.Workflow, /):
@@ -250,6 +318,12 @@ class Workflow:
             self._name = name.name
             self._workflow = name
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __str__(self):
+        return self.__repr__()
+
     @property
     def name(self) -> str:
         return self._name
@@ -258,9 +332,26 @@ class Workflow:
     def region(self) -> str:
         return self.name.split('locations/')[1].split('/')[0]
 
+    @property
+    def content(self) -> dict:
+        if self._workflow is None:
+            self._refresh()
+        return json.loads(self._workflow.source_contents)
+
+    @property
+    def create_time(self) -> datetime.datetime:
+        if self._workflow is None:
+            self._refresh()
+        return self._workflow.create_time
+
+    @property
+    def update_time(self) -> datetime.datetime:
+        self._refresh()
+        return self._workflow.update_time
+
     def _refresh(self):
         req = workflows_v1.GetWorkflowRequest(name=self._name)
-        self._workflow = self._workflow_client().get_workflow(req)
+        self._workflow = self._call_workflow_client('get_workflow', req)
 
     def state(self) -> Literal['STATE_UNSPECIFIED', 'ACTIVE', 'UNAVAILABLE']:
         self._refresh()
@@ -272,14 +363,14 @@ class Workflow:
         else:
             exe = executions_v1.Execution()
         req = executions_v1.CreateExecutionRequest(parent=self._name, execution=exe)
-        resp = self._execution_client().create_execution(req)
+        resp = self._call_execution_client('create_execution', req)
         return Execution(resp)
 
     def delete(self) -> None:
         req = workflows_v1.DeleteWorkflowRequest(name=self._name)
-        self._workflow_client().delete_workflow(req)
+        self._call_workflow_client('delete_workflow', req)
 
     def list_executions(self) -> list[Execution]:
         req = executions_v1.ListExecutionsRequest(parent=self.name)
-        resp = self._execution_client().list_executions(req)
+        resp = self._call_execution_client('list_executions', req)
         return [Execution(r) for r in resp]

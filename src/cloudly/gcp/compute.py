@@ -97,6 +97,24 @@ class InstanceConfig:
                 auto_delete=True,
             )
 
+    class GPU:
+        def __init__(self, *, gpu_type: str, gpu_count: int):
+            """
+            `gpu_type`: values like 'nvidia-tesla-t4', 'nvidia-tesla-v100', etc.
+            """
+            assert gpu_type
+            assert gpu_count
+            self.gpu_type = gpu_type
+            self.gpu_count = gpu_count
+            self.zone = None  # to be assigned separately
+
+        @property
+        def accelerator(self) -> compute_v1.AcceleratorConfig:
+            return compute_v1.AcceleratorConfig(
+                accelerator_count=self.gpu_count,
+                accelerator_type=f'projects/{get_project_id()}/zones/{self.zone}/acceleratorTypes/{self.gpu_type}',
+            )
+
     def __init__(
         self,
         *,
@@ -109,8 +127,7 @@ class InstanceConfig:
         network_uri: str,
         subnet_uri: str,
         startup_script: str | None = None,
-        gpu_type: str | None = None,
-        gpu_count: int | None = None,
+        gpu: dict | None = None,
     ):
         """
         `network_uri` may look like "projects/shared-vpc-admin/global/networks/vpcnet-shared-prod-01".
@@ -133,7 +150,7 @@ class InstanceConfig:
         disks.append(self.BootDisk(**(boot_disk or {})).disk)
         if local_ssd:
             ssd = self.LocalSSD(**local_ssd)
-            ssd._zone = zone
+            ssd.zone = zone
             disks.append(ssd.disk)
 
         network = compute_v1.NetworkInterface(
@@ -152,13 +169,10 @@ class InstanceConfig:
         ]
         guest_accelerators = None
         scheduling = None
-        if gpu_type and gpu_count:
-            guest_accelerators = [
-                compute_v1.AcceleratorConfig(
-                    accelerator_count=gpu_count,
-                    accelerator_type=f'projects/{get_project_id()}/zones/{zone}/acceleratorTypes/{gpu_type}',
-                )
-            ]
+        if gpu:
+            gpu = self.GPU(**gpu)
+            gpu.zone = zone
+            guest_accelerators = [gpu.accelerator]
             scheduling = compute_v1.Scheduling(on_host_maintenance='TERMINATE')
             # See https://cloud.google.com/compute/docs/instances/setting-vm-host-options
 
@@ -185,12 +199,17 @@ class Instance:
         return compute_v1.InstancesClient(credentials=get_credentials())
 
     @classmethod
+    def _call_client(cls, method: str, *args, **kwargs):
+        with cls._client() as client:
+            return getattr(client, method)(*args, **kwargs)
+
+    @classmethod
     def create(cls, *, name: str, zone: str, **kwargs) -> Instance:
         config = InstanceConfig(name=name, zone=zone, **kwargs).instance
         req = compute_v1.InsertInstanceRequest(
             project=get_project_id(), zone=zone, instance_resource=config
         )
-        op = cls._client().insert(req)
+        op = cls._call_client('insert', req)
         op.result()
         # This could raise `google.api_core.exceptions.Forbidden` with message "... QUOTA_EXCEEDED ..."
         return cls(name, zone)
@@ -198,7 +217,7 @@ class Instance:
     @classmethod
     def list(cls, zone: str) -> list[Instance]:
         req = compute_v1.ListInstancesRequest(project=get_project_id(), zone=zone)
-        resp = cls._client().list(req)
+        resp = cls._call_client('list', req)
         zz = []
         for r in resp:
             o = cls(r.name, zone)
@@ -211,6 +230,12 @@ class Instance:
         self._zone = zone
         self._instance = None
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __str__(self):
+        return self.__repr__()
+
     @property
     def name(self) -> str:
         return self._name
@@ -219,14 +244,14 @@ class Instance:
         req = compute_v1.GetInstanceRequest(
             instance=self._name, project=get_project_id(), zone=self._zone
         )
-        self._instance = self._client().get(req)
+        self._instance = self._call_client('get', req)
         # This could raise `google.api_core.exceptions.NotFound`
 
     def delete(self) -> None:
         req = compute_v1.DeleteInstanceRequest(
             instance=self._name, project=get_project_id(), zone=self._zone
         )
-        op = self._client().delete(req)
+        op = self._call_client('delete', req)
         op.result()
 
     def state(

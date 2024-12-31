@@ -15,6 +15,11 @@ class Job:
         return scheduler_v1.CloudSchedulerClient(credentials=get_credentials())
 
     @classmethod
+    def _call_client(cls, method: str, *args, **kwargs):
+        with cls._client() as client:
+            return getattr(client, method)(*args, **kwargs)
+
+    @classmethod
     def create(
         cls,
         *,
@@ -39,8 +44,8 @@ class Job:
             body = None
         job = scheduler_v1.Job(
             name=f'{parent}/jobs/{name}',
-            cron_schedule=cron_schedule,
-            timezone=timezone,
+            schedule=cron_schedule,
+            time_zone=timezone,
             http_target=scheduler_v1.HttpTarget(
                 uri=f'https://workflowexecutions.googleapis.com/v1/{workflow.name}/executions',
                 http_method=scheduler_v1.HttpMethod(scheduler_v1.HttpMethod.POST),
@@ -51,7 +56,7 @@ class Job:
             ),
         )
         req = scheduler_v1.CreateJobRequest(parent=parent, job=job)
-        resp = cls._client().create_job(req)
+        resp = cls._call_client('create_job', req)
         return cls(resp)
 
     def __init__(self, name: str | scheduler_v1.Job, /):
@@ -62,17 +67,23 @@ class Job:
             self._name = name.name
             self._job = name
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __str__(self):
+        return self.__repr__()
+
     @property
     def name(self) -> str:
         return self._name
 
     def _refresh(self):
         req = scheduler_v1.GetJobRequest(name=self._name)
-        self._job = self._client().get_job(req)
+        self._job = self._call_client('get_job', req)
 
     def delete(self):
         req = scheduler_v1.DeleteJobRequest(name=self._name)
-        self._client().delete_job(req)
+        self._call_client('delete_job', req)
 
     def state(
         self,

@@ -6,12 +6,14 @@ import pyarrow
 from cloudly.biglist.parquet import (
     ParquetBatchData,
     ParquetFileReader,
-    make_parquet_schema,
-    make_parquet_type,
     read_parquet_file,
     write_pylist_to_parquet,
 )
 from cloudly.upathlib import LocalUpath
+from cloudly.upathlib.serializer import (
+    make_parquet_schema,
+    make_parquet_type,
+)
 
 
 def test_idx_locator():

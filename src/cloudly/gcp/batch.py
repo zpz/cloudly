@@ -400,12 +400,13 @@ class JobConfig:
 
 class Job:
     @classmethod
-    def _client(self):
+    def _client(cls):
         return batch_v1.BatchServiceClient(credentials=get_credentials())
-        # TODO: this client object has a context manager; check it out.
 
-    # def define(cls, **kwargs) -> JobConfig:
-    #     return JobConfig(**kwargs)
+    @classmethod
+    def _call_client(cls, method: str, *args, **kwargs):
+        with cls._client() as client:
+            return getattr(client, method)(*args, **kwargs)
 
     @classmethod
     def create(cls, *, name: str, config: JobConfig) -> Job:
@@ -420,7 +421,7 @@ class Job:
             job_id=name,
             job=config.job,
         )
-        job = cls._client().create_job(req)
+        job = cls._call_client('create_job', req)
         return cls(job)
 
     @classmethod
@@ -428,7 +429,7 @@ class Job:
         req = batch_v1.ListJobsRequest(
             parent=f'projects/{get_project_id()}/locations/{region}'
         )
-        jobs = cls._client().list_jobs(request=req)
+        jobs = cls._call_client('list_jobs', req)
         return [cls(j) for j in jobs]
 
     def __init__(self, name: str | batch_v1.Job, /):
@@ -447,13 +448,19 @@ class Job:
             self._name = name.name
             self._job = name
 
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __str__(self):
+        return self.__repr__()
+
     @property
     def name(self) -> str:
         return self._name
 
     def _refresh(self):
         req = batch_v1.GetJobRequest(name=self.name)
-        self._job = self._client().get_job(request=req)
+        self._job = self._call_client('get_job', req)
 
     def status(self) -> batch_v1.JobStatus:
         """
@@ -478,4 +485,4 @@ class Job:
 
     def delete(self) -> None:
         req = batch_v1.DeleteJobRequest(name=self.name)
-        self._client().delete_job(req)
+        self._call_client('delete_job', req)

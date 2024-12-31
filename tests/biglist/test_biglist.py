@@ -26,11 +26,11 @@ from cloudly.biglist import (
     ParquetBiglist,
 )
 from cloudly.biglist.parquet import (
-    ParquetSerializer,
     read_parquet_file,
     write_arrays_to_parquet,
 )
 from cloudly.upathlib import LocalUpath
+from cloudly.upathlib.serializer import ParquetSerializer
 from cloudly.util.seq import Slicer
 
 
