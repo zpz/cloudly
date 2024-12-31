@@ -39,6 +39,7 @@ from typing_extensions import Self
 from ._util import MAX_THREADS, get_shared_thread_pool
 from .serializer import (
     JsonSerializer,
+    ParquetSerializer,
     PickleSerializer,
     ZstdPickleSerializer,
 )
@@ -589,6 +590,12 @@ class Upath(abc.ABC):
 
     def read_pickle_zstd(self, **kwargs) -> Any:
         return ZstdPickleSerializer.load(self, **kwargs)
+
+    def write_parquet(self, data: list[dict], *, overwrite=False, **kwargs) -> None:
+        return ParquetSerializer.dump(data, self, overwrite=overwrite, **kwargs)
+
+    def read_parquet(self, **kwargs) -> list[dict]:
+        return ParquetSerializer.load(self, **kwargs)
 
     def _dir_to_dir(
         self,
