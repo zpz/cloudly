@@ -15,6 +15,11 @@ class Job:
         return scheduler_v1.CloudSchedulerClient(credentials=get_credentials())
 
     @classmethod
+    def _call_client(cls, method: str, *args, **kwargs):
+        with cls._client() as client:
+            return getattr(client, method)(*args, **kwargs)
+
+    @classmethod
     def create(
         cls,
         *,
@@ -51,7 +56,7 @@ class Job:
             ),
         )
         req = scheduler_v1.CreateJobRequest(parent=parent, job=job)
-        resp = cls._client().create_job(req)
+        resp = cls._call_client('create_job', req)
         return cls(resp)
 
     def __init__(self, name: str | scheduler_v1.Job, /):
@@ -74,11 +79,11 @@ class Job:
 
     def _refresh(self):
         req = scheduler_v1.GetJobRequest(name=self._name)
-        self._job = self._client().get_job(req)
+        self._job = self._call_client('get_job', req)
 
     def delete(self):
         req = scheduler_v1.DeleteJobRequest(name=self._name)
-        self._client().delete_job(req)
+        self._call_client('delete_job', req)
 
     def state(
         self,

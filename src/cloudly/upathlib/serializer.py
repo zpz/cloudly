@@ -5,8 +5,11 @@ import threading
 import zlib
 from contextlib import contextmanager
 from typing import Protocol, TypeVar
+from collections.abc import Sequence, Iterable
+import io
 
 import zstandard
+import pyarrow
 
 # zstandard has good compression ratio and also quite fast.
 # It is very "balanced".
@@ -152,6 +155,207 @@ class ZstdPickleSerializer(PickleSerializer):
         return super().deserialize(y, **kwargs)
 
 
+
+def make_parquet_type(type_spec: str | Sequence):
+    """
+    ``type_spec`` is a spec of arguments to one of pyarrow's data type
+    `factory functions <https://arrow.apache.org/docs/python/api/datatypes.html#factory-functions>`_.
+
+    For simple types, this may be just the type name (or function name), e.g. ``'bool_'``, ``'string'``, ``'float64'``.
+
+    For type functions expecting arguments, this is a list or tuple with the type name followed by other arguments,
+    for example,
+
+    ::
+
+        ('time32', 's')
+        ('decimal128', 5, -3)
+
+    For compound types (types constructed by other types), this is a "recursive" structure, such as
+
+    ::
+
+        ('list_', 'int64')
+        ('list_', ('time32', 's'), 5)
+
+    where the second element is the spec for the member type, or
+
+    ::
+
+        ('map_', 'string', ('list_', 'int64'), True)
+
+    where the second and third elements are specs for the key type and value type, respectively,
+    and the fourth element is the optional argument ``keys_sorted`` to
+    `pyarrow.map_() <https://arrow.apache.org/docs/python/generated/pyarrow.map_.html#pyarrow.map_>`_.
+    Below is an example of a struct type::
+
+        ('struct', [('name', 'string', False), ('age', 'uint8', True), ('income', ('struct', (('currency', 'string'), ('amount', 'uint64'))), False)])
+
+    Here, the second element is the list of fields in the struct.
+    Each field is expressed by a spec that is taken by :meth:`make_parquet_field`.
+    """
+    if isinstance(type_spec, str):
+        type_name = type_spec
+        args = ()
+    else:
+        type_name = type_spec[0]
+        args = type_spec[1:]
+
+    if type_name in ('string', 'float64', 'bool_', 'int8', 'int64', 'uint8', 'uint64'):
+        assert not args
+        return getattr(pyarrow, type_name)()
+
+    if type_name == 'list_':
+        if len(args) > 2:
+            raise ValueError(f"'pyarrow.list_' expects 1 or 2 args, got `{args}`")
+        return pyarrow.list_(make_parquet_type(args[0]), *args[1:])
+
+    if type_name in ('map_', 'dictionary'):
+        if len(args) > 3:
+            raise ValueError(f"'pyarrow.{type_name}' expects 2 or 3 args, got `{args}`")
+        return getattr(pyarrow, type_name)(
+            make_parquet_type(args[0]),
+            make_parquet_type(args[1]),
+            *args[2:],
+        )
+
+    if type_name == 'struct':
+        assert len(args) == 1
+        return pyarrow.struct((make_parquet_field(v) for v in args[0]))
+
+    if type_name == 'large_list':
+        assert len(args) == 1
+        return pyarrow.large_list(make_parquet_type(args[0]))
+
+    if type_name in (
+        'int16',
+        'int32',
+        'uint16',
+        'uint32',
+        'float32',
+        'date32',
+        'date64',
+        'month_day_nano_interval',
+        'utf8',
+        'large_binary',
+        'large_string',
+        'large_utf8',
+        'null',
+    ):
+        assert not args
+        return getattr(pyarrow, type_name)()
+
+    if type_name in ('time32', 'time64', 'duration'):
+        assert len(args) == 1
+    elif type_name in ('timestamp', 'decimal128'):
+        assert len(args) in (1, 2)
+    elif type_name in ('binary',):
+        assert len(args) <= 1
+    else:
+        raise ValueError(f"unknown pyarrow type '{type_name}'")
+    return getattr(pyarrow, type_name)(*args)
+
+
+def make_parquet_field(field_spec: Sequence):
+    """
+    ``filed_spec`` is a list or tuple with 2, 3, or 4 elements.
+    The first element is the name of the field.
+    The second element is the spec of the type, to be passed to function :func:`make_parquet_type`.
+    Additional elements are the optional ``nullable`` and ``metadata`` to the function
+    `pyarrow.field() <https://arrow.apache.org/docs/python/generated/pyarrow.field.html#pyarrow.field>`_.
+    """
+    field_name = field_spec[0]
+    type_spec = field_spec[1]
+    assert len(field_spec) <= 4  # two optional elements are `nullable` and `metadata`.
+    return pyarrow.field(field_name, make_parquet_type(type_spec), *field_spec[3:])
+
+
+def make_parquet_schema(fields_spec: Iterable[Sequence]):
+    """
+    This function constructs a pyarrow schema that is expressed by simple Python types
+    that can be json-serialized.
+
+    ``fields_spec`` is a list or tuple, each of its elements accepted by :func:`make_parquet_field`.
+
+    This function is motivated by the need of :class:`~biglist._biglist.ParquetSerializer`.
+    When :class:`biglist.Biglist` uses a "storage-format" that takes options (such as 'parquet'),
+    these options can be passed into :func:`biglist.Biglist.new` (via ``serialize_kwargs`` and ``deserialize_kwargs``) and saved in "info.json".
+    However, this requires the options to be json-serializable.
+    Therefore, the argument ``schema`` to :meth:`ParquetSerializer.serialize() <biglist._biglist.ParquetSerializer.serialize>`
+    can not be used by this mechanism.
+    As an alternative, user can use the argument ``schema_spec``;
+    this argument can be saved in "info.json", and it is handled by this function.
+    """
+    return pyarrow.schema((make_parquet_field(v) for v in fields_spec))
+
+
+
+class ParquetSerializer(Serializer):
+    @classmethod
+    def serialize(
+        cls,
+        x: list[dict],
+        schema: pyarrow.Schema = None,
+        schema_spec: Sequence = None,
+        metadata=None,
+        **kwargs,
+    ):
+        """
+        `x` is a list of data items. Each item is a dict. In the output Parquet file,
+        each item is a "row".
+
+        The content of the item dict should follow a regular pattern.
+        Not every structure is supported. The data `x` must be acceptable to
+        `pyarrow.Table.from_pylist <https://arrow.apache.org/docs/python/generated/pyarrow.Table.html#pyarrow.Table.from_pylist>`_. If unsure, use a list with a couple data elements
+        and experiment with ``pyarrow.Table.from_pylist`` directly.
+
+        When using ``storage_format='parquet'`` for :class:`Biglist`, each data element is a dict
+        with a consistent structure that is acceptable to ``pyarrow.Table.from_pylist``.
+        When reading the Biglist, the original Python data elements are returned.
+        (A record read out may not be exactly equal to the original that was written, in that
+        elements that were missing in a record when written may have been filled in with ``None``
+        when read back out.)
+        In other words, the reading is *not* like that of :class:`~biglist.ParquetBiglist`.
+        You can always create a separate ParquetBiglist for the data files of the Biglist
+        in order to use Parquet-style data reading. The data files are valid Parquet files.
+
+        If neither ``schema`` nor ``schema_spec`` is specified, then the data schema is auto-inferred
+        based on the first element of ``x``. If this does not work, you can specify either ``schema`` or ``schema_spec``.
+        The advantage of ``schema_spec`` is that it is json-serializable Python types, hence can be passed into
+        :meth:`Biglist.new() <biglist.Biglist.new>` via ``serialize_kwargs`` and saved in "info.json" of the biglist.
+
+        If ``schema_spec`` is not flexible or powerful enough for your use case, then you may have to use ``schema``.
+        """
+        if schema is not None:
+            assert schema_spec is None
+        elif schema_spec is not None:
+            assert schema is None
+            schema = make_parquet_schema(schema_spec)
+        table = pyarrow.Table.from_pylist(x, schema=schema, metadata=metadata)
+        sink = io.BytesIO()
+        writer = pyarrow.parquet.ParquetWriter(sink, table.schema, **kwargs)
+        writer.write_table(table)
+        writer.close()
+        sink.seek(0)
+        # return sink.getvalue()  # bytes
+        # return sink.getbuffer()  # memoryview
+        return sink
+        # this is a file-like object; `cloudly.upathlib.LocalUpath.write_bytes` and `cloudly.upathlib.GcsBlobUpath.write_bytes` accept this.
+        # We do not return the bytes because `cloudly.upathlib.GcsBlobUpath.write_bytes` can take file-like objects directly.
+
+    @classmethod
+    def deserialize(cls, y: bytes, **kwargs):
+        try:
+            memoryview(y)
+        except TypeError:
+            pass  # `y` is a file-like object
+        else:
+            # `y` is a bytes-like object
+            y = io.BytesIO(y)
+        table = pyarrow.parquet.ParquetFile(y, **kwargs).read()
+        return table.to_pylist()
+
+
 try:
     # To use this, just install the Python package `lz4`.
     import lz4.frame
@@ -230,3 +434,4 @@ else:
             def deserialize(cls, y, **kwargs):
                 y = lz4.frame.decompress(y)
                 return super().deserialize(y, **kwargs)
+

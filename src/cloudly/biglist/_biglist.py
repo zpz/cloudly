@@ -23,6 +23,8 @@ from cloudly.upathlib.serializer import (
     PickleSerializer,
     Serializer,
     ZstdPickleSerializer,
+    ParquetSerializer,
+    make_parquet_schema,
 )
 from cloudly.util.seq import Element
 
@@ -31,10 +33,7 @@ from ._util import (
     FileReader,
     FileSeq,
 )
-from .parquet import (
-    ParquetSerializer,
-    make_parquet_schema,
-)
+
 
 logger = logging.getLogger(__name__)
 

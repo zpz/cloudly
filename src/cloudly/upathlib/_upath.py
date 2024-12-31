@@ -41,6 +41,7 @@ from .serializer import (
     JsonSerializer,
     PickleSerializer,
     ZstdPickleSerializer,
+    ParquetSerializer,
 )
 
 # End user may want to do this:
@@ -589,6 +590,12 @@ class Upath(abc.ABC):
 
     def read_pickle_zstd(self, **kwargs) -> Any:
         return ZstdPickleSerializer.load(self, **kwargs)
+
+    def write_parquet(self, data: list[dict], *, overwrite=False, **kwargs) -> None:
+        return ParquetSerializer.dump(data, self, overwrite=overwrite, **kwargs)
+    
+    def read_parquet(self, **kwargs) -> list[dict]:
+        return ParquetSerializer.load(self, **kwargs)
 
     def _dir_to_dir(
         self,
