@@ -238,6 +238,10 @@ class Execution:
         self._refresh()
         return self._execution.state.name
 
+    def cancel(self):
+        req = executions_v1.CancelExecutionRequest(name=self.name)
+        Workflow._call_execution_client('cancel_execution', req)
+
 
 class Workflow:
     @classmethod
@@ -342,8 +346,7 @@ class Workflow:
 
     @property
     def update_time(self) -> datetime.datetime:
-        if self._workflow is None:
-            self._refresh()
+        self._refresh()
         return self._workflow.update_time
 
     def _refresh(self):
