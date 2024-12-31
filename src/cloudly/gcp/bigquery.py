@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Sequence, Iterable
+from collections.abc import Iterable, Sequence
 from typing import Literal
 
 import google.api_core.exceptions
@@ -59,7 +59,7 @@ class Dataset:
 
     def external_table(self, table_id: str) -> ExternalTable:
         return ExternalTable(table_id=table_id, dataset_id=self.dataset_id)
-    
+
 
 class _Table:
     """
@@ -192,10 +192,11 @@ class Table(_Table):
         `data` is an iterable of dicts for rows.
         """
         job_config = _load_job_config(schema=schema, autodetect=(schema is None))
-        job = get_client().load_table_from_json(data, destination=self.qualified_table_id, job_config=job_config)
+        job = get_client().load_table_from_json(
+            data, destination=self.qualified_table_id, job_config=job_config
+        )
         wait_on_job(job.job_id, sleep_seconds=wait_sleep_seconds)
         return self
-    
 
 
 class ExternalTable(_Table):
