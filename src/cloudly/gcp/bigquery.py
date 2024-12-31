@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import time
-from collections.abc import Sequence
+from collections.abc import Sequence, Iterable
 from typing import Literal
 
 import google.api_core.exceptions
@@ -36,6 +38,10 @@ def wait_on_job(job_id: str, *, sleep_seconds: float | None = None):
     return job
 
 
+def dataset(*args, **kwargs) -> Dataset:
+    return Dataset(*args, **kwargs)
+
+
 class Dataset:
     def __init__(self, dataset_id: str):
         self.dataset_id = dataset_id
@@ -48,6 +54,12 @@ class Dataset:
         tables = get_client().list_tables(self.dataset_id)
         return sorted(t.table_id for t in tables if t.table_type == 'EXTERNAL')
 
+    def table(self, table_id: str) -> Table:
+        return Table(table_id=table_id, dataset_id=self.dataset_id)
+
+    def external_table(self, table_id: str) -> ExternalTable:
+        return ExternalTable(table_id=table_id, dataset_id=self.dataset_id)
+    
 
 class _Table:
     """
@@ -90,10 +102,12 @@ def _load_job_config(
     **kwargs,
 ):
     if 'source_format' in kwargs:
-        assert kwargs['source_format'] in ('CSV', 'PARQUET', 'AVRO', 'ORC')
-        kwargs['source_format'] = getattr(
-            bigquery.SourceFormat, kwargs['source_format']
-        )
+        kwargs['source_format'] = {
+            'CSV': bigquery.SourceFormat.CSV,
+            'PARQUET': bigquery.SourceFormat.PARQUET,
+            'AVRO': bigquery.SourceFormat.AVRO,
+            'ORC': bigquery.SourceFormat.ORC,
+        }[kwargs['source_format']]
 
     return bigquery.LoadJobConfig(
         clustering_fields=clustering_fields,
@@ -139,13 +153,16 @@ class Table(_Table):
         self._table = get_client().create_table(table, exists_ok=False)
         return self
 
-    def import_from_query(self, sql: str, *, wait_sleep_seconds=None):
+    def load_from_query(self, sql: str, *, wait_sleep_seconds=None):
+        """
+        Load the result of the query `sql` into the current table.
+        """
         job_config = _query_job_config(destination=self.qualified_table_id)
         job = get_client().query(sql, job_config=job_config)
         wait_on_job(job.job_id, sleep_seconds=wait_sleep_seconds)
         return self
 
-    def import_from_uri(
+    def load_from_cloud(
         self,
         uris: str | Sequence[str],
         *,
@@ -153,6 +170,8 @@ class Table(_Table):
         wait_sleep_seconds=None,
     ):
         """
+        Load the content of the data files into the current table.
+
         `uris` are data files in Google Cloud Storage, formatted like "gs://<bucket_name>/<object_name_or_glob>".
         """
         job_config = _load_job_config(autodetect=True, source_format=source_format)
@@ -161,6 +180,22 @@ class Table(_Table):
         )
         wait_on_job(job.job_id, sleep_seconds=wait_sleep_seconds)
         return self
+
+    def load_from_json(
+        self,
+        data: Iterable[dict],
+        *,
+        schema: Sequence[SchemaField] | None = None,
+        wait_sleep_seconds=None,
+    ):
+        """
+        `data` is an iterable of dicts for rows.
+        """
+        job_config = _load_job_config(schema=schema, autodetect=(schema is None))
+        job = get_client().load_table_from_json(data, destination=self.qualified_table_id, job_config=job_config)
+        wait_on_job(job.job_id, sleep_seconds=wait_sleep_seconds)
+        return self
+    
 
 
 class ExternalTable(_Table):
