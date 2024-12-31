@@ -402,7 +402,7 @@ class Job:
     @classmethod
     def _client(cls):
         return batch_v1.BatchServiceClient(credentials=get_credentials())
-    
+
     @classmethod
     def _call_client(cls, method: str, *args, **kwargs):
         with cls._client() as client:

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 __all__ = ['Workflow', 'Execution', 'Step', 'BatchStep']
 
+import datetime
 import json
 import uuid
 from collections.abc import Sequence
 from typing import Literal
-import datetime
 
 from google.cloud import workflows_v1
 from google.cloud.workflows import executions_v1
@@ -202,7 +202,7 @@ class Execution:
         if self._execution is None:
             self._refresh()
         return self._execution.start_time
-    
+
     @property
     def end_time(self) -> datetime.datetime:
         # If not finished (`state()` returns "ACTIVE"), this returns `None`.
@@ -339,7 +339,7 @@ class Workflow:
         if self._workflow is None:
             self._refresh()
         return self._workflow.create_time
-    
+
     @property
     def update_time(self) -> datetime.datetime:
         if self._workflow is None:

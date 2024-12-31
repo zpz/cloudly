@@ -20,10 +20,10 @@ from typing_extensions import Self
 from cloudly.upathlib import PathType, Upath, resolve_path
 from cloudly.upathlib.serializer import (
     JsonSerializer,
+    ParquetSerializer,
     PickleSerializer,
     Serializer,
     ZstdPickleSerializer,
-    ParquetSerializer,
     make_parquet_schema,
 )
 from cloudly.util.seq import Element
@@ -33,7 +33,6 @@ from ._util import (
     FileReader,
     FileSeq,
 )
-
 
 logger = logging.getLogger(__name__)
 

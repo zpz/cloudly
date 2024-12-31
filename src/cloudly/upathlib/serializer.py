@@ -1,15 +1,15 @@
 import gc
+import io
 import json
 import pickle
 import threading
 import zlib
+from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
 from typing import Protocol, TypeVar
-from collections.abc import Sequence, Iterable
-import io
 
-import zstandard
 import pyarrow
+import zstandard
 
 # zstandard has good compression ratio and also quite fast.
 # It is very "balanced".
@@ -155,7 +155,6 @@ class ZstdPickleSerializer(PickleSerializer):
         return super().deserialize(y, **kwargs)
 
 
-
 def make_parquet_type(type_spec: str | Sequence):
     """
     ``type_spec`` is a spec of arguments to one of pyarrow's data type
@@ -287,7 +286,6 @@ def make_parquet_schema(fields_spec: Iterable[Sequence]):
     this argument can be saved in "info.json", and it is handled by this function.
     """
     return pyarrow.schema((make_parquet_field(v) for v in fields_spec))
-
 
 
 class ParquetSerializer(Serializer):
@@ -434,4 +432,3 @@ else:
             def deserialize(cls, y, **kwargs):
                 y = lz4.frame.decompress(y)
                 return super().deserialize(y, **kwargs)
-
