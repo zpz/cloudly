@@ -21,7 +21,9 @@ _workflow_client_ = None
 def _call_workflow_client(meth: str, *args, **kwargs):
     global _workflow_client_
     if _workflow_client_ is None:
-        _workflow_client_ = workflows_v1.WorkflowsClient(credentials=get_credentials()).__enter__()
+        _workflow_client_ = workflows_v1.WorkflowsClient(
+            credentials=get_credentials()
+        ).__enter__()
     return getattr(_workflow_client_, meth)(*args, **kwargs)
     # Can not use context manager in each call, like with "execution client";
     # would be `ValueError: Cannot invoke RPC on closed channel!`.
