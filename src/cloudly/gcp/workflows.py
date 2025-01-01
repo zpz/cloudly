@@ -2,6 +2,7 @@ from __future__ import annotations
 
 __all__ = ['Workflow', 'Execution', 'Step', 'BatchStep']
 
+import atexit
 import datetime
 import json
 import uuid
@@ -13,6 +14,33 @@ from google.cloud.workflows import executions_v1
 
 from .auth import get_credentials, get_project_id
 from .batch import JobConfig as BatchJobConfig
+
+_workflow_client_ = None
+
+
+def _call_workflow_client(meth: str, *args, **kwargs):
+    global _workflow_client_
+    if _workflow_client_ is None:
+        _workflow_client_ = workflows_v1.WorkflowsClient(credentials=get_credentials()).__enter__()
+    return getattr(_workflow_client_, meth)(*args, **kwargs)
+    # Can not use context manager in each call, like with "execution client";
+    # would be `ValueError: Cannot invoke RPC on closed channel!`.
+    # Don't know why; probably due to interaction with "execution client".
+
+
+def _call_execution_client(meth: str, *args, **kwargs):
+    with executions_v1.ExecutionsClient(credentials=get_credentials()) as client:
+        return getattr(client, meth)(*args, **kwargs)
+
+
+def _cleanup():
+    global _workflow_client_
+    if _workflow_client_ is not None:
+        _workflow_client_.__exit__()
+        _workflow_client_ = None
+
+
+atexit.register(_cleanup)
 
 
 class Step:
@@ -195,7 +223,7 @@ class Execution:
 
     def _refresh(self):
         req = executions_v1.GetExecutionRequest(name=self.name)
-        self._execution = Workflow._call_execution_client('get_execution', req)
+        self._execution = _call_execution_client('get_execution', req)
 
     @property
     def start_time(self) -> datetime.datetime:
@@ -240,28 +268,10 @@ class Execution:
 
     def cancel(self):
         req = executions_v1.CancelExecutionRequest(name=self.name)
-        Workflow._call_execution_client('cancel_execution', req)
+        _call_execution_client('cancel_execution', req)
 
 
 class Workflow:
-    @classmethod
-    def _workflow_client(cls):
-        return workflows_v1.WorkflowsClient(credentials=get_credentials())
-
-    @classmethod
-    def _call_workflow_client(cls, method: str, *args, **kwargs):
-        with cls._workflow_client() as client:
-            return getattr(client, method)(*args, **kwargs)
-
-    @classmethod
-    def _execution_client(cls):
-        return executions_v1.ExecutionsClient(credentials=get_credentials())
-
-    @classmethod
-    def _call_execution_client(cls, method: str, *args, **kwargs):
-        with cls._execution_client() as client:
-            return getattr(client, method)(*args, **kwargs)
-
     @classmethod
     def create(
         cls,
@@ -295,7 +305,7 @@ class Workflow:
             workflow=workflow,
             workflow_id=name,
         )
-        op = cls._call_workflow_client('create_workflow', req)
+        op = _call_workflow_client('create_workflow', req)
         resp = op.result()
         return cls(resp)
 
@@ -304,7 +314,7 @@ class Workflow:
         req = workflows_v1.ListWorkflowsRequest(
             parent=f'projects/{get_project_id()}/locations/{region}'
         )
-        resp = cls._call_workflow_client('list_workflows', req)
+        resp = _call_workflow_client('list_workflows', req)
         return [cls(r) for r in resp]
 
     def __init__(self, name: str | workflows_v1.Workflow, /):
@@ -351,7 +361,7 @@ class Workflow:
 
     def _refresh(self):
         req = workflows_v1.GetWorkflowRequest(name=self._name)
-        self._workflow = self._call_workflow_client('get_workflow', req)
+        self._workflow = _call_workflow_client('get_workflow', req)
 
     def state(self) -> Literal['STATE_UNSPECIFIED', 'ACTIVE', 'UNAVAILABLE']:
         self._refresh()
@@ -363,14 +373,14 @@ class Workflow:
         else:
             exe = executions_v1.Execution()
         req = executions_v1.CreateExecutionRequest(parent=self._name, execution=exe)
-        resp = self._call_execution_client('create_execution', req)
+        resp = _call_execution_client('create_execution', req)
         return Execution(resp)
 
     def delete(self) -> None:
         req = workflows_v1.DeleteWorkflowRequest(name=self._name)
-        self._call_workflow_client('delete_workflow', req)
+        _call_workflow_client('delete_workflow', req)
 
     def list_executions(self) -> list[Execution]:
         req = executions_v1.ListExecutionsRequest(parent=self.name)
-        resp = self._call_execution_client('list_executions', req)
+        resp = _call_execution_client('list_executions', req)
         return [Execution(r) for r in resp]
