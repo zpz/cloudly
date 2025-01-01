@@ -5,7 +5,6 @@ __all__ = ['Workflow', 'Execution', 'Step', 'BatchStep']
 import atexit
 import datetime
 import json
-import uuid
 from collections.abc import Sequence
 from typing import Literal
 
@@ -275,7 +274,7 @@ class WorkflowConfig:
     @property
     def definition(self) -> dict:
         return {'main': self._content}
-    
+
 
 class Workflow:
     @classmethod
