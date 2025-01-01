@@ -101,6 +101,7 @@ class BatchStep(Step):
       https://atamel.dev/posts/2023/05-30_workflows_batch_connector/
       https://cloud.google.com/workflows/docs/reference/googleapis/batch/Overview
     """
+
     def __init__(
         self,
         name: str,
@@ -126,7 +127,7 @@ class BatchStep(Step):
                 'call': 'googleapis.batch.v1.projects.locations.jobs.delete',
                 'args': {
                     'name': f'{parent}/jobs/{job_id}',
-                }
+                },
             }
             content = {
                 'steps': [
@@ -136,7 +137,7 @@ class BatchStep(Step):
             }
         else:
             content = create_job
-            
+
         # `job_id`` requirement: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$  Note in particular: doesn't allow underscore.
         # `result` name must be a valid variable (or identifier) name, e.g. it can't contain dash.
         # Experiments suggested that `job_id` and `result` name do not have fixed relation with the step `name`;
@@ -219,8 +220,8 @@ class Execution:
 class WorkflowConfig:
     def __init__(self, steps: Sequence[Step]):
         """
-        If your workflow requires command-line arguments, you should access individual arguments 
-        using `dot`, for example, "args.name", "args.age". 
+        If your workflow requires command-line arguments, you should access individual arguments
+        using `dot`, for example, "args.name", "args.age".
         Correspondingly in :meth:`execute`, you need to pass a dict to `args`,
         e.g. `{'name': 'Tom', 'age': 38}`.
         """
