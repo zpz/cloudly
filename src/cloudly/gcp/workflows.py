@@ -45,9 +45,6 @@ def _call_execution_client(meth: str, *args, **kwargs):
         return getattr(client, meth)(*args, **kwargs)
 
 
-
-
-
 class Step:
     def __init__(self, name: str, content: dict):
         """
