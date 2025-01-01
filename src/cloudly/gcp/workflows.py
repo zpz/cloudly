@@ -88,7 +88,7 @@ class Step:
         self._content = content
 
     @property
-    def content(self) -> dict:
+    def definition(self) -> dict:
         return {self.name: self._content}
 
 
@@ -298,7 +298,7 @@ class Workflow:
         content = {'main': {}}
         if args_name:
             content['main']['params'] = [args_name]
-        content['main']['steps'] = [s.content for s in steps]
+        content['main']['steps'] = [s.definition for s in steps]
         content = json.dumps(content)
 
         workflow = workflows_v1.Workflow(source_contents=content)
@@ -345,7 +345,7 @@ class Workflow:
         return self.name.split('locations/')[1].split('/')[0]
 
     @property
-    def content(self) -> dict:
+    def definition(self) -> dict:
         if self._workflow is None:
             self._refresh()
         return json.loads(self._workflow.source_contents)
