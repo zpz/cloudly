@@ -2,9 +2,9 @@ from __future__ import annotations
 
 __all__ = ['Workflow', 'Execution', 'Step', 'BatchStep']
 
+import atexit
 import datetime
 import json
-import uuid
 from collections.abc import Sequence
 from typing import Literal
 
@@ -13,6 +13,35 @@ from google.cloud.workflows import executions_v1
 
 from .auth import get_credentials, get_project_id
 from .batch import JobConfig as BatchJobConfig
+
+_workflow_client_ = None
+
+
+def _cleanup():
+    global _workflow_client_
+    if _workflow_client_ is not None:
+        _workflow_client_.__exit__(None, None, None)
+        _workflow_client_ = None
+
+
+atexit.register(_cleanup)
+
+
+def _call_workflow_client(meth: str, *args, **kwargs):
+    global _workflow_client_
+    if _workflow_client_ is None:
+        _workflow_client_ = workflows_v1.WorkflowsClient(
+            credentials=get_credentials()
+        ).__enter__()
+    return getattr(_workflow_client_, meth)(*args, **kwargs)
+    # Can not use context manager in each call, like with "execution client";
+    # would be `ValueError: Cannot invoke RPC on closed channel!`.
+    # Don't know why; probably due to interaction with "execution client".
+
+
+def _call_execution_client(meth: str, *args, **kwargs):
+    with executions_v1.ExecutionsClient(credentials=get_credentials()) as client:
+        return getattr(client, meth)(*args, **kwargs)
 
 
 class Step:
@@ -58,74 +87,8 @@ class Step:
         self._content = content
 
     @property
-    def content(self) -> dict:
+    def definition(self) -> dict:
         return {self.name: self._content}
-
-
-class WaitStep(Step):
-    """
-    Wait for a GCP service such as a Batch job to finish.
-
-    TODO: does not work; fix this.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        *,
-        job_url: str,
-        success_state: str = 'SUCCEEDED',
-        failure_state: str = 'ERROR',
-        poll_interval_seconds: int = 10,
-    ):
-        uid = str(uuid.uuid4()).replace('-', '')[:8]
-        content = {
-            'steps': [
-                {
-                    f'poll_{uid}': {
-                        'call': 'http.get',
-                        'args': {
-                            'url': job_url,
-                            'auth': {'type': 'OAuth2'},
-                        },
-                        'result': f'poll_{uid}_result',
-                    }
-                },
-                {
-                    f'check_{uid}': {
-                        'switch': [
-                            {
-                                'condition': f'${{poll_{uid}_result.body.status.state == "{success_state}"}}',
-                                'next': f'log_{uid}',
-                            },
-                            {
-                                'condition': f'${{poll_{uid}_result.body.status.state == "{failure_state}"}}',
-                                'raise': f'{name} error: ${{poll_{uid}_result.body.status.state}}',
-                            },
-                        ],
-                        'next': f'sleep_{uid}',
-                    }
-                },
-                {
-                    f'sleep_{uid}': {
-                        'call': 'sys.sleep',
-                        'args': {'seconds': poll_interval_seconds},
-                        'next': f'poll_{uid}',
-                    }
-                },
-                {
-                    f'log_{uid}': {
-                        'call': 'sys.log',
-                        'args': {
-                            'data': f'${{"{name} state: poll_{uid}_result.body.status.state"}}',
-                        },
-                    }
-                },
-            ]
-        }
-        # TODO: the `log` step may not be very useful.
-        # TODO: how happens after the `raise`?
-        super().__init__(name, content)
 
 
 class ParallelStep(Step):
@@ -133,43 +96,54 @@ class ParallelStep(Step):
 
 
 class BatchStep(Step):
+    """
+    See
+      https://atamel.dev/posts/2023/05-30_workflows_batch_connector/
+      https://cloud.google.com/workflows/docs/reference/googleapis/batch/Overview
+    """
+
     def __init__(
         self,
         name: str,
         config: BatchJobConfig,
         *,
-        result_name: str = None,
+        keep_batch_job: bool = False,
     ):
-        """
-        If you want Workflows to wait for this batch job to finish, add a :meth:`WaitStep` after this,
-        using `self.job_url` as the argument `job_url` to `WaitStep`.
-
-        If you want to assign the result to a variable, pass in `result_name`. Usually, you can use
-        `name.replace('-', '_') + '_result'`.
-        """
-        api_url = f'https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{config.region}/jobs'
         job_config = json.loads(type(config.job).to_json(config.job))
         job_id = name.replace('_', '-')
-
-        content = {
-            'call': 'http.post',
+        parent = f'projects/{get_project_id()}/locations/{config.region}'
+        result_name = name.replace('-', '_') + '_result'
+        create_job = {
+            'call': 'googleapis.batch.v1.projects.locations.jobs.create',
             'args': {
-                'url': api_url,
-                'query': {'job_id': job_id},
-                'headers': {'Content-Type': 'application/json'},
-                'auth': {'type': 'OAuth2'},
+                'parent': parent,
+                'jobId': job_id,
                 'body': job_config,
             },
+            'result': result_name,
         }
-        if result_name:
-            assert '-' not in result_name, f"'-' not in '{result_name}'"
-            content['result'] = result_name
+        if keep_batch_job:
+            delete_job = {
+                'call': 'googleapis.batch.v1.projects.locations.jobs.delete',
+                'args': {
+                    'name': f'{parent}/jobs/{job_id}',
+                },
+            }
+            content = {
+                'steps': [
+                    {'create_job': create_job},
+                    {'delete_job': delete_job},
+                ]
+            }
+        else:
+            content = create_job
+
         # `job_id`` requirement: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$  Note in particular: doesn't allow underscore.
         # `result` name must be a valid variable (or identifier) name, e.g. it can't contain dash.
         # Experiments suggested that `job_id` and `result` name do not have fixed relation with the step `name`;
         # I made changes to both and it still worked.
         super().__init__(name, content)
-        self.job_url = f'{api_url}/{job_id}'
+        self.job_url = f'https://batch.googleapis.com/v1/{parent}/jobs/{job_id}'
         self.job_id = job_id
         self.result_name = result_name
 
@@ -195,7 +169,7 @@ class Execution:
 
     def _refresh(self):
         req = executions_v1.GetExecutionRequest(name=self.name)
-        self._execution = Workflow._call_execution_client('get_execution', req)
+        self._execution = _call_execution_client('get_execution', req)
 
     @property
     def start_time(self) -> datetime.datetime:
@@ -240,36 +214,35 @@ class Execution:
 
     def cancel(self):
         req = executions_v1.CancelExecutionRequest(name=self.name)
-        Workflow._call_execution_client('cancel_execution', req)
+        _call_execution_client('cancel_execution', req)
+
+
+class WorkflowConfig:
+    def __init__(self, steps: Sequence[Step]):
+        """
+        If your workflow requires command-line arguments, you should access individual arguments
+        using `dot`, for example, "args.name", "args.age".
+        Correspondingly in :meth:`execute`, you need to pass a dict to `args`,
+        e.g. `{'name': 'Tom', 'age': 38}`.
+        """
+        self._content = {
+            'params': ['args'],
+            'steps': [s.definition for s in steps],
+        }
+
+    @property
+    def definition(self) -> dict:
+        return {'main': self._content}
 
 
 class Workflow:
     @classmethod
-    def _workflow_client(cls):
-        return workflows_v1.WorkflowsClient(credentials=get_credentials())
-
-    @classmethod
-    def _call_workflow_client(cls, method: str, *args, **kwargs):
-        with cls._workflow_client() as client:
-            return getattr(client, method)(*args, **kwargs)
-
-    @classmethod
-    def _execution_client(cls):
-        return executions_v1.ExecutionsClient(credentials=get_credentials())
-
-    @classmethod
-    def _call_execution_client(cls, method: str, *args, **kwargs):
-        with cls._execution_client() as client:
-            return getattr(client, method)(*args, **kwargs)
-
-    @classmethod
     def create(
         cls,
-        name: str,
-        steps: Sequence[Step],
         *,
+        name: str,
+        config: WorkflowConfig,
         region: str,
-        args_name: str = None,
     ) -> Workflow:
         """
         `name` needs to be unique, hence it's recommended to construct it with some randomness.
@@ -277,25 +250,14 @@ class Workflow:
         If you create a workflow for a, say, batch job, then you probably should get `region`
         from the batch job definition. I don't know whether it's allowed for a workflow to
         contain jobs spanning regions.
-
-        If your workflow requires command-line arguments, you should specify a single name for them,
-        and access individual arguments using `dot`, for example, "args.name", "args.age", etc, where
-        `args_name` is "args". Correspondingly in :meth:`execute`, you need to pass a dict to `args`,
-        e.g. `{'name': 'Tom', 'age': 38}`.
         """
-        content = {'main': {}}
-        if args_name:
-            content['main']['params'] = [args_name]
-        content['main']['steps'] = [s.content for s in steps]
-        content = json.dumps(content)
-
-        workflow = workflows_v1.Workflow(source_contents=content)
+        workflow = workflows_v1.Workflow(source_contents=json.dumps(config.definition))
         req = workflows_v1.CreateWorkflowRequest(
             parent=f'projects/{get_project_id()}/locations/{region}',
             workflow=workflow,
             workflow_id=name,
         )
-        op = cls._call_workflow_client('create_workflow', req)
+        op = _call_workflow_client('create_workflow', req)
         resp = op.result()
         return cls(resp)
 
@@ -304,7 +266,7 @@ class Workflow:
         req = workflows_v1.ListWorkflowsRequest(
             parent=f'projects/{get_project_id()}/locations/{region}'
         )
-        resp = cls._call_workflow_client('list_workflows', req)
+        resp = _call_workflow_client('list_workflows', req)
         return [cls(r) for r in resp]
 
     def __init__(self, name: str | workflows_v1.Workflow, /):
@@ -333,7 +295,7 @@ class Workflow:
         return self.name.split('locations/')[1].split('/')[0]
 
     @property
-    def content(self) -> dict:
+    def definition(self) -> dict:
         if self._workflow is None:
             self._refresh()
         return json.loads(self._workflow.source_contents)
@@ -349,13 +311,25 @@ class Workflow:
         self._refresh()
         return self._workflow.update_time
 
+    @property
+    def revision_id(self):
+        self._refresh()
+        return self._workflow.revision_id
+
     def _refresh(self):
         req = workflows_v1.GetWorkflowRequest(name=self._name)
-        self._workflow = self._call_workflow_client('get_workflow', req)
+        self._workflow = _call_workflow_client('get_workflow', req)
 
     def state(self) -> Literal['STATE_UNSPECIFIED', 'ACTIVE', 'UNAVAILABLE']:
         self._refresh()
         return self._workflow.state.name
+
+    def update(self, config: WorkflowConfig):
+        self._refresh()
+        self._workflow.source_contents = json.dumps(config.definition)
+        req = workflows_v1.UpdateWorkflowRequest(workflow=self._workflow)
+        op = _call_workflow_client('update_workflow', req)
+        self._workflow = op.result()
 
     def execute(self, args: dict | None = None) -> Execution:
         if args:
@@ -363,14 +337,14 @@ class Workflow:
         else:
             exe = executions_v1.Execution()
         req = executions_v1.CreateExecutionRequest(parent=self._name, execution=exe)
-        resp = self._call_execution_client('create_execution', req)
+        resp = _call_execution_client('create_execution', req)
         return Execution(resp)
 
     def delete(self) -> None:
         req = workflows_v1.DeleteWorkflowRequest(name=self._name)
-        self._call_workflow_client('delete_workflow', req)
+        _call_workflow_client('delete_workflow', req)
 
     def list_executions(self) -> list[Execution]:
         req = executions_v1.ListExecutionsRequest(parent=self.name)
-        resp = self._call_execution_client('list_executions', req)
+        resp = _call_execution_client('list_executions', req)
         return [Execution(r) for r in resp]

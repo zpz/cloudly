@@ -193,23 +193,19 @@ class InstanceConfig:
         return self._instance
 
 
+def _call_client(method: str, *args, **kwargs):
+    with compute_v1.InstancesClient(credentials=get_credentials()) as client:
+        return getattr(client, method)(*args, **kwargs)
+
+
 class Instance:
-    @classmethod
-    def _client(cls) -> compute_v1.InstancesClient:
-        return compute_v1.InstancesClient(credentials=get_credentials())
-
-    @classmethod
-    def _call_client(cls, method: str, *args, **kwargs):
-        with cls._client() as client:
-            return getattr(client, method)(*args, **kwargs)
-
     @classmethod
     def create(cls, *, name: str, zone: str, **kwargs) -> Instance:
         config = InstanceConfig(name=name, zone=zone, **kwargs).instance
         req = compute_v1.InsertInstanceRequest(
             project=get_project_id(), zone=zone, instance_resource=config
         )
-        op = cls._call_client('insert', req)
+        op = _call_client('insert', req)
         op.result()
         # This could raise `google.api_core.exceptions.Forbidden` with message "... QUOTA_EXCEEDED ..."
         return cls(name, zone)
@@ -217,7 +213,7 @@ class Instance:
     @classmethod
     def list(cls, zone: str) -> list[Instance]:
         req = compute_v1.ListInstancesRequest(project=get_project_id(), zone=zone)
-        resp = cls._call_client('list', req)
+        resp = _call_client('list', req)
         zz = []
         for r in resp:
             o = cls(r.name, zone)
@@ -244,14 +240,14 @@ class Instance:
         req = compute_v1.GetInstanceRequest(
             instance=self._name, project=get_project_id(), zone=self._zone
         )
-        self._instance = self._call_client('get', req)
+        self._instance = _call_client('get', req)
         # This could raise `google.api_core.exceptions.NotFound`
 
     def delete(self) -> None:
         req = compute_v1.DeleteInstanceRequest(
             instance=self._name, project=get_project_id(), zone=self._zone
         )
-        op = self._call_client('delete', req)
+        op = _call_client('delete', req)
         op.result()
 
     def state(
