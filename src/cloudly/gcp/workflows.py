@@ -95,8 +95,6 @@ class Step:
 class WaitStep(Step):
     """
     Wait for a GCP service such as a Batch job to finish.
-
-    TODO: does not work; fix this.
     """
 
     def __init__(
@@ -104,58 +102,45 @@ class WaitStep(Step):
         name: str,
         *,
         job_url: str,
-        success_state: str = 'SUCCEEDED',
-        failure_state: str = 'ERROR',
-        poll_interval_seconds: int = 10,
+        poll_interval_seconds: int = 30,
     ):
-        uid = str(uuid.uuid4()).replace('-', '')[:8]
         content = {
             'steps': [
                 {
-                    f'poll_{uid}': {
+                    'poll': {
                         'call': 'http.get',
                         'args': {
                             'url': job_url,
                             'auth': {'type': 'OAuth2'},
                         },
-                        'result': f'poll_{uid}_result',
+                        'result': 'job_status',
                     }
                 },
                 {
-                    f'check_{uid}': {
+                    'check': {
                         'switch': [
                             {
-                                'condition': f'${{poll_{uid}_result.body.status.state == "{success_state}"}}',
-                                'next': f'log_{uid}',
+                                'condition': '${job_status.body.status.state in ["QUEUED", "SCHEDULED", "RUNNING"]}',
+                                'next': 'wait',
                             },
                             {
-                                'condition': f'${{poll_{uid}_result.body.status.state == "{failure_state}"}}',
-                                'raise': f'{name} error: ${{poll_{uid}_result.body.status.state}}',
+                                'condition': True,
+                                'return': '${job_status.body.status.state}',
                             },
                         ],
-                        'next': f'sleep_{uid}',
                     }
                 },
                 {
-                    f'sleep_{uid}': {
+                    'wait': {
                         'call': 'sys.sleep',
                         'args': {'seconds': poll_interval_seconds},
-                        'next': f'poll_{uid}',
-                    }
-                },
-                {
-                    f'log_{uid}': {
-                        'call': 'sys.log',
-                        'args': {
-                            'data': f'{name} state: ${{poll_{uid}_result.body.status.state}}',
-                        },
+                        'next': 'poll',
                     }
                 },
             ]
         }
-        # TODO: the `log` step may not be very useful.
-        # TODO: how happens after the `raise`?
         super().__init__(name, content)
+        # TODO: raise exception if 'condition' is failure?
 
 
 class ParallelStep(Step):
@@ -273,15 +258,33 @@ class Execution:
         _call_execution_client('cancel_execution', req)
 
 
+class WorkflowConfig:
+    def __init__(self, steps: Sequence[Step], *, args_name: str = None):
+        """
+        If your workflow requires command-line arguments, you should specify a single name for them,
+        and access individual arguments using `dot`, for example, "args.name", "args.age", etc, where
+        `args_name` is "args". Correspondingly in :meth:`execute`, you need to pass a dict to `args`,
+        e.g. `{'name': 'Tom', 'age': 38}`.
+        """
+        content = {}
+        if args_name:
+            content['params'] = [args_name]
+        content['steps'] = [s.definition for s in steps]
+        self._content = content
+
+    @property
+    def definition(self) -> dict:
+        return {'main': self._content}
+    
+
 class Workflow:
     @classmethod
     def create(
         cls,
-        name: str,
-        steps: Sequence[Step],
         *,
+        name: str,
+        config: WorkflowConfig,
         region: str,
-        args_name: str = None,
     ) -> Workflow:
         """
         `name` needs to be unique, hence it's recommended to construct it with some randomness.
@@ -289,19 +292,8 @@ class Workflow:
         If you create a workflow for a, say, batch job, then you probably should get `region`
         from the batch job definition. I don't know whether it's allowed for a workflow to
         contain jobs spanning regions.
-
-        If your workflow requires command-line arguments, you should specify a single name for them,
-        and access individual arguments using `dot`, for example, "args.name", "args.age", etc, where
-        `args_name` is "args". Correspondingly in :meth:`execute`, you need to pass a dict to `args`,
-        e.g. `{'name': 'Tom', 'age': 38}`.
         """
-        content = {'main': {}}
-        if args_name:
-            content['main']['params'] = [args_name]
-        content['main']['steps'] = [s.definition for s in steps]
-        content = json.dumps(content)
-
-        workflow = workflows_v1.Workflow(source_contents=content)
+        workflow = workflows_v1.Workflow(source_contents=json.dumps(config.definition))
         req = workflows_v1.CreateWorkflowRequest(
             parent=f'projects/{get_project_id()}/locations/{region}',
             workflow=workflow,
@@ -361,6 +353,11 @@ class Workflow:
         self._refresh()
         return self._workflow.update_time
 
+    @property
+    def revision_id(self):
+        self._refresh()
+        return self._workflow.revision_id
+
     def _refresh(self):
         req = workflows_v1.GetWorkflowRequest(name=self._name)
         self._workflow = _call_workflow_client('get_workflow', req)
@@ -368,6 +365,13 @@ class Workflow:
     def state(self) -> Literal['STATE_UNSPECIFIED', 'ACTIVE', 'UNAVAILABLE']:
         self._refresh()
         return self._workflow.state.name
+
+    def update(self, config: WorkflowConfig):
+        self._refresh()
+        self._workflow.source_contents = json.dumps(config.definition)
+        req = workflows_v1.UpdateWorkflowRequest(workflow=self._workflow)
+        op = _call_workflow_client('update_workflow', req)
+        self._workflow = op.result()
 
     def execute(self, args: dict | None = None) -> Execution:
         if args:
