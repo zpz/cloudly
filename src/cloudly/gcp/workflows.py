@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ['Workflow', 'Execution', 'Step', 'BatchStep']
+__all__ = ['Workflow', 'WorkflowConfig', 'Execution', 'Step', 'BatchStep']
 
 import atexit
 import datetime
@@ -57,7 +57,7 @@ class Step:
               "result": "api_response1",
             }
 
-        In "nested steps", `content` can be like this::
+        With "nested steps", `content` will be like this::
 
             {
               "steps": [
@@ -81,7 +81,7 @@ class Step:
               ]
             }
 
-        where each element of the list can be the output of `Step.render` of some step.
+        where each element of the list can be the output of `Step.definition` of some step.
         """
         self.name = name
         self._content = content
@@ -100,6 +100,7 @@ class BatchStep(Step):
     See
       https://atamel.dev/posts/2023/05-30_workflows_batch_connector/
       https://cloud.google.com/workflows/docs/reference/googleapis/batch/Overview
+      https://cloud.google.com/workflows/docs/sleeping
     """
 
     def __init__(
@@ -123,6 +124,8 @@ class BatchStep(Step):
             'result': result_name,
         }
         if keep_batch_job:
+            content = create_job
+        else:
             delete_job = {
                 'call': 'googleapis.batch.v1.projects.locations.jobs.delete',
                 'args': {
@@ -135,8 +138,6 @@ class BatchStep(Step):
                     {'delete_job': delete_job},
                 ]
             }
-        else:
-            content = create_job
 
         # `job_id`` requirement: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$  Note in particular: doesn't allow underscore.
         # `result` name must be a valid variable (or identifier) name, e.g. it can't contain dash.
@@ -148,81 +149,12 @@ class BatchStep(Step):
         self.result_name = result_name
 
 
-class Execution:
-    def __init__(self, name: str | executions_v1.Execution):
-        if isinstance(name, str):
-            self._name = name
-            self._execution = None
-        else:
-            self._name = name.name
-            self._execution = name
-
-    def __repr__(self):
-        return f"{self.__class__.__name__}('{self.name}')"
-
-    def __str__(self):
-        return self.__repr__()
-
-    @property
-    def name(self):
-        return self._name
-
-    def _refresh(self):
-        req = executions_v1.GetExecutionRequest(name=self.name)
-        self._execution = _call_execution_client('get_execution', req)
-
-    @property
-    def start_time(self) -> datetime.datetime:
-        if self._execution is None:
-            self._refresh()
-        return self._execution.start_time
-
-    @property
-    def end_time(self) -> datetime.datetime:
-        # If not finished (`state()` returns "ACTIVE"), this returns `None`.
-        self._refresh()
-        return self._execution.end_time
-
-    @property
-    def argument(self):
-        if self._execution is None:
-            self._refresh()
-        return self._execution.argument
-
-    def result(self):
-        self._refresh()
-        return str(self._execution.result)
-
-    def status(self):
-        # If still running, this returns which step is currently running.
-        self._refresh()
-        return self._execution.status
-
-    def state(
-        self,
-    ) -> Literal[
-        'STATE_UNSPECIFIED',
-        'ACTIVE',
-        'SUCCEEDED',
-        'FAILED',
-        'CANCELLED',
-        'UNAVAILABLE',
-        'QUEUED',
-    ]:
-        self._refresh()
-        return self._execution.state.name
-
-    def cancel(self):
-        req = executions_v1.CancelExecutionRequest(name=self.name)
-        _call_execution_client('cancel_execution', req)
-
-
 class WorkflowConfig:
     def __init__(self, steps: Sequence[Step]):
         """
         If your workflow requires command-line arguments, you should access individual arguments
         using `dot`, for example, "args.name", "args.age".
-        Correspondingly in :meth:`execute`, you need to pass a dict to `args`,
+        Correspondingly in :meth:`Workflow.execute`, you need to pass a dict to `args`,
         e.g. `{'name': 'Tom', 'age': 38}`.
         """
         self._content = {
@@ -348,3 +280,72 @@ class Workflow:
         req = executions_v1.ListExecutionsRequest(parent=self.name)
         resp = _call_execution_client('list_executions', req)
         return [Execution(r) for r in resp]
+
+
+class Execution:
+    def __init__(self, name: str | executions_v1.Execution):
+        if isinstance(name, str):
+            self._name = name
+            self._execution = None
+        else:
+            self._name = name.name
+            self._execution = name
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.name}')"
+
+    def __str__(self):
+        return self.__repr__()
+
+    @property
+    def name(self):
+        return self._name
+
+    def _refresh(self):
+        req = executions_v1.GetExecutionRequest(name=self.name)
+        self._execution = _call_execution_client('get_execution', req)
+
+    @property
+    def start_time(self) -> datetime.datetime:
+        if self._execution is None:
+            self._refresh()
+        return self._execution.start_time
+
+    @property
+    def end_time(self) -> datetime.datetime:
+        # If not finished (`state()` returns "ACTIVE"), this returns `None`.
+        self._refresh()
+        return self._execution.end_time
+
+    @property
+    def argument(self):
+        if self._execution is None:
+            self._refresh()
+        return self._execution.argument
+
+    def result(self):
+        self._refresh()
+        return str(self._execution.result)
+
+    def status(self):
+        # If still running, this returns which step is currently running.
+        self._refresh()
+        return self._execution.status
+
+    def state(
+        self,
+    ) -> Literal[
+        'STATE_UNSPECIFIED',
+        'ACTIVE',
+        'SUCCEEDED',
+        'FAILED',
+        'CANCELLED',
+        'UNAVAILABLE',
+        'QUEUED',
+    ]:
+        self._refresh()
+        return self._execution.state.name
+
+    def cancel(self):
+        req = executions_v1.CancelExecutionRequest(name=self.name)
+        _call_execution_client('cancel_execution', req)
