@@ -148,7 +148,6 @@ class BatchStep(Step):
         self.result_name = result_name
 
 
-
 class WorkflowConfig:
     def __init__(self, steps: Sequence[Step]):
         """
@@ -280,7 +279,6 @@ class Workflow:
         req = executions_v1.ListExecutionsRequest(parent=self.name)
         resp = _call_execution_client('list_executions', req)
         return [Execution(r) for r in resp]
-
 
 
 class Execution:
