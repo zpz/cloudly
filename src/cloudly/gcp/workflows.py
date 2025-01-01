@@ -91,99 +91,58 @@ class Step:
         return {self.name: self._content}
 
 
-class WaitStep(Step):
-    """
-    Wait for a GCP service such as a Batch job to finish.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        *,
-        job_url: str,
-        poll_interval_seconds: int = 30,
-    ):
-        content = {
-            'steps': [
-                {
-                    'poll': {
-                        'call': 'http.get',
-                        'args': {
-                            'url': job_url,
-                            'auth': {'type': 'OAuth2'},
-                        },
-                        'result': 'job_status',
-                    }
-                },
-                {
-                    'check': {
-                        'switch': [
-                            {
-                                'condition': '${job_status.body.status.state in ["QUEUED", "SCHEDULED", "RUNNING"]}',
-                                'next': 'wait',
-                            },
-                            {
-                                'condition': True,
-                                'return': '${job_status.body.status.state}',
-                            },
-                        ],
-                    }
-                },
-                {
-                    'wait': {
-                        'call': 'sys.sleep',
-                        'args': {'seconds': poll_interval_seconds},
-                        'next': 'poll',
-                    }
-                },
-            ]
-        }
-        super().__init__(name, content)
-        # TODO: raise exception if 'condition' is failure?
-
-
 class ParallelStep(Step):
     pass
 
 
 class BatchStep(Step):
+    """
+    See
+      https://atamel.dev/posts/2023/05-30_workflows_batch_connector/
+      https://cloud.google.com/workflows/docs/reference/googleapis/batch/Overview
+    """
     def __init__(
         self,
         name: str,
         config: BatchJobConfig,
         *,
-        result_name: str = None,
+        keep_batch_job: bool = False,
     ):
-        """
-        If you want Workflows to wait for this batch job to finish, add a :meth:`WaitStep` after this,
-        using `self.job_url` as the argument `job_url` to `WaitStep`.
-
-        If you want to assign the result to a variable, pass in `result_name`. Usually, you can use
-        `name.replace('-', '_') + '_result'`.
-        """
-        api_url = f'https://batch.googleapis.com/v1/projects/{get_project_id()}/locations/{config.region}/jobs'
         job_config = json.loads(type(config.job).to_json(config.job))
         job_id = name.replace('_', '-')
-
-        content = {
-            'call': 'http.post',
+        parent = f'projects/{get_project_id()}/locations/{config.region}'
+        result_name = name.replace('-', '_') + '_result'
+        create_job = {
+            'call': 'googleapis.batch.v1.projects.locations.jobs.create',
             'args': {
-                'url': api_url,
-                'query': {'job_id': job_id},
-                'headers': {'Content-Type': 'application/json'},
-                'auth': {'type': 'OAuth2'},
+                'parent': parent,
+                'jobId': job_id,
                 'body': job_config,
             },
+            'result': result_name,
         }
-        if result_name:
-            assert '-' not in result_name, f"'-' not in '{result_name}'"
-            content['result'] = result_name
+        if keep_batch_job:
+            delete_job = {
+                'call': 'googleapis.batch.v1.projects.locations.jobs.delete',
+                'args': {
+                    'name': f'{parent}/jobs/{job_id}',
+                }
+            }
+            content = {
+                'steps': [
+                    {'create_job': create_job},
+                    {'delete_job': delete_job},
+                ]
+            }
+        else:
+            content = create_job
+            
         # `job_id`` requirement: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$  Note in particular: doesn't allow underscore.
         # `result` name must be a valid variable (or identifier) name, e.g. it can't contain dash.
         # Experiments suggested that `job_id` and `result` name do not have fixed relation with the step `name`;
         # I made changes to both and it still worked.
         super().__init__(name, content)
-        self.job_url = f'{api_url}/{job_id}'
+        self.job_url = f'https://batch.googleapis.com/v1/{parent}/jobs/{job_id}'
         self.job_id = job_id
         self.result_name = result_name
 
@@ -258,18 +217,17 @@ class Execution:
 
 
 class WorkflowConfig:
-    def __init__(self, steps: Sequence[Step], *, args_name: str = None):
+    def __init__(self, steps: Sequence[Step]):
         """
-        If your workflow requires command-line arguments, you should specify a single name for them,
-        and access individual arguments using `dot`, for example, "args.name", "args.age", etc, where
-        `args_name` is "args". Correspondingly in :meth:`execute`, you need to pass a dict to `args`,
+        If your workflow requires command-line arguments, you should access individual arguments 
+        using `dot`, for example, "args.name", "args.age". 
+        Correspondingly in :meth:`execute`, you need to pass a dict to `args`,
         e.g. `{'name': 'Tom', 'age': 38}`.
         """
-        content = {}
-        if args_name:
-            content['params'] = [args_name]
-        content['steps'] = [s.definition for s in steps]
-        self._content = content
+        self._content = {
+            'params': ['args'],
+            'steps': [s.definition for s in steps],
+        }
 
     @property
     def definition(self) -> dict:
