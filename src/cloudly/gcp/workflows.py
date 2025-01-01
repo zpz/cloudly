@@ -18,6 +18,16 @@ from .batch import JobConfig as BatchJobConfig
 _workflow_client_ = None
 
 
+def _cleanup():
+    global _workflow_client_
+    if _workflow_client_ is not None:
+        _workflow_client_.__exit__(None, None, None)
+        _workflow_client_ = None
+
+
+atexit.register(_cleanup)
+
+
 def _call_workflow_client(meth: str, *args, **kwargs):
     global _workflow_client_
     if _workflow_client_ is None:
@@ -35,14 +45,7 @@ def _call_execution_client(meth: str, *args, **kwargs):
         return getattr(client, meth)(*args, **kwargs)
 
 
-def _cleanup():
-    global _workflow_client_
-    if _workflow_client_ is not None:
-        _workflow_client_.__exit__()
-        _workflow_client_ = None
 
-
-atexit.register(_cleanup)
 
 
 class Step:
@@ -147,7 +150,7 @@ class WaitStep(Step):
                     f'log_{uid}': {
                         'call': 'sys.log',
                         'args': {
-                            'data': f'${{"{name} state: poll_{uid}_result.body.status.state"}}',
+                            'data': f'{name} state: ${{poll_{uid}_result.body.status.state}}',
                         },
                     }
                 },
