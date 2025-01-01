@@ -100,6 +100,7 @@ class BatchStep(Step):
     See
       https://atamel.dev/posts/2023/05-30_workflows_batch_connector/
       https://cloud.google.com/workflows/docs/reference/googleapis/batch/Overview
+      https://cloud.google.com/workflows/docs/sleeping
     """
 
     def __init__(
