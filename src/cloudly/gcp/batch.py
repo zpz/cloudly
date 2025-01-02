@@ -50,7 +50,7 @@ class TaskConfig:
             You may want to consider including these in `options`: "--log-driver=gcplogs".
             """
             # if not commands.startswith('-c '):
-                # commands = '-c ' + commands
+            # commands = '-c ' + commands
 
             if options:
                 options = ' ' + options.strip() + ' '  # to help search in it

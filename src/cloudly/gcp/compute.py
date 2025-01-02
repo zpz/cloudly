@@ -204,7 +204,9 @@ class Instance:
     @classmethod
     def create(cls, config: InstanceConfig) -> Instance:
         req = compute_v1.InsertInstanceRequest(
-            project=get_project_id(), zone=config.zone, instance_resource=config.instance,
+            project=get_project_id(),
+            zone=config.zone,
+            instance_resource=config.instance,
         )
         op = _call_client('insert', req)
         op.result()
