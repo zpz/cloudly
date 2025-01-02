@@ -59,15 +59,12 @@ def basic_resource_labels():
 class InstanceConfig:
     class BootDisk:
         def __init__(
-            self, *, size_gb: int | None = None, source_image: str | None = None
+            self, *, size_gb: int = 30, source_image: str = 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64',
         ):
             if size_gb:
                 assert size_gb >= 30, f'{size_gb} >= 30'
-            self.size_gb = size_gb or 30  # GCP default is 30
-            self.source_image = (
-                source_image
-                or 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
-            )
+            self.size_gb = size_gb  # GCP default is 30
+            self.source_image = source_image
 
         @property
         def disk(self) -> compute_v1.AttachedDisk:
