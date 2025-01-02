@@ -10,6 +10,7 @@ __all__ = ['Job', 'JobConfig']
 
 import warnings
 from typing import Literal
+import json
 
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
@@ -46,8 +47,6 @@ class TaskConfig:
                 environment variables that you want to be passed into the container are also handled by `options`.
 
             With '/bin/bash' as `entrypoint`, `commands` may need to start with "-c".
-
-            You may want to consider including these in `options`: "--log-driver=gcplogs".
             """
             # if not commands.startswith('-c '):
             # commands = '-c ' + commands
@@ -60,6 +59,9 @@ class TaskConfig:
                 options += ' --rm '
             if ' --init ' not in options:
                 options += '--init '
+            if ' --log-driver ' not in options and ' --log-driver=' not in options:
+                options += '--log-driver=gcplogs'
+                # TODO: what does this do? is this necessary?
 
             if gpu:
                 if ' --runtime=nvidia ' not in options:
@@ -395,6 +397,13 @@ class JobConfig:
         return self._job
 
     @property
+    def definition(self) -> dict:
+        # `self._job.__str__` actually is formatted nicely,
+        # but we choose to return the built-in dict type.
+        # If you want a nice printout, just print `self.job`.
+        return type(self._job).to_dict(self._job)
+
+    @property
     def region(self) -> str:
         return self._job.allocation_policy.location.allowed_locations[0].split('/')[1]
 
@@ -454,6 +463,12 @@ class Job:
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def definition(self) -> dict:
+        if self._job is None:
+            self._refresh()
+        return type(self._job).to_dict(self._job)
 
     def _refresh(self):
         req = batch_v1.GetJobRequest(name=self.name)

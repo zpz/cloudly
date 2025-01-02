@@ -7,6 +7,7 @@ from google.cloud import scheduler_v1
 
 from .auth import get_credentials, get_project_id, get_service_account_email
 from .workflows import Workflow
+from .compute import validate_label_key
 
 
 def _call_client(method: str, *args, **kwargs):
@@ -33,6 +34,7 @@ class Job:
         cron_schedule
             See https://cloud.google.com/scheduler/docs/configuring/cron-job-schedules
         """
+        validate_label_key(name)
         parent = f'projects/{get_project_id()}/locations/{workflow.region}'
         if workflow_args:
             body = json.dumps(workflow_args).encode('utf-8')

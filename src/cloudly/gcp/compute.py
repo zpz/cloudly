@@ -15,7 +15,9 @@ from cloudly.util.logging import get_calling_file
 from .auth import get_credentials, get_project_id, get_service_account_email
 
 
+
 def validate_label_key(val: str) -> str:
+    # TODO: use `re`.
     if len(val) < 1 or len(val) > 63:
         raise ValueError(val)
     allowed = string.ascii_lowercase + string.digits + '-_'
