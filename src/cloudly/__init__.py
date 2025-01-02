@@ -2,4 +2,4 @@
 Utilities for cloud computing.
 """
 
-__version__ = '0.2.5b5'
+__version__ = '0.2.5b6'

@@ -187,6 +187,8 @@ class InstanceConfig:
             guest_accelerators=guest_accelerators,
             scheduling=scheduling,
         )
+        self.name = name
+        self.zone = zone
 
     @property
     def instance(self) -> compute_v1.Instance:
@@ -200,15 +202,16 @@ def _call_client(method: str, *args, **kwargs):
 
 class Instance:
     @classmethod
-    def create(cls, *, name: str, zone: str, **kwargs) -> Instance:
-        config = InstanceConfig(name=name, zone=zone, **kwargs).instance
+    def create(cls, config: InstanceConfig) -> Instance:
         req = compute_v1.InsertInstanceRequest(
-            project=get_project_id(), zone=zone, instance_resource=config
+            project=get_project_id(),
+            zone=config.zone,
+            instance_resource=config.instance,
         )
         op = _call_client('insert', req)
         op.result()
         # This could raise `google.api_core.exceptions.Forbidden` with message "... QUOTA_EXCEEDED ..."
-        return cls(name, zone)
+        return cls(config.name, config.zone)
 
     @classmethod
     def list(cls, zone: str) -> list[Instance]:

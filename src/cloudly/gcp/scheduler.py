@@ -18,8 +18,8 @@ class Job:
     @classmethod
     def create(
         cls,
-        *,
         name: str,
+        *,
         cron_schedule: str,
         workflow: Workflow,
         workflow_args: dict | None = None,
