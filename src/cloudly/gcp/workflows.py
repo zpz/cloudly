@@ -5,6 +5,7 @@ __all__ = ['Workflow', 'WorkflowConfig', 'Execution', 'Step', 'BatchStep']
 import atexit
 import datetime
 import json
+import string
 from collections.abc import Sequence
 from typing import Literal
 
@@ -13,6 +14,7 @@ from google.cloud.workflows import executions_v1
 
 from .auth import get_credentials, get_project_id
 from .batch import JobConfig as BatchJobConfig
+from .compute import validate_label_key
 
 _workflow_client_ = None
 
@@ -25,6 +27,16 @@ def _cleanup():
 
 
 atexit.register(_cleanup)
+
+
+def validate_identifier_name(val: str) -> str:
+    # TODO: use `re`.
+    if val[0] not in string.ascii_lowercase:
+        raise ValueError(val)
+    for v in val[1:]:
+        if v not in string.ascii_lowercase and v not in string.digits and v != '_':
+            raise ValueError(val)
+    return val
 
 
 def _call_workflow_client(meth: str, *args, **kwargs):
@@ -83,6 +95,7 @@ class Step:
 
         where each element of the list can be the output of `Step.definition` of some step.
         """
+        validate_label_key(name)
         self.name = name
         self._content = content
 
@@ -110,10 +123,12 @@ class BatchStep(Step):
         *,
         keep_batch_job: bool = False,
     ):
+        validate_label_key(name)
         job_config = json.loads(type(config.job).to_json(config.job))
         job_id = name.replace('_', '-')
         parent = f'projects/{get_project_id()}/locations/{config.region}'
         result_name = name.replace('-', '_') + '_result'
+        validate_identifier_name(result_name)
         create_job = {
             'call': 'googleapis.batch.v1.projects.locations.jobs.create',
             'args': {
@@ -162,10 +177,17 @@ class WorkflowConfig:
             'params': ['args'],
             'steps': [s.definition for s in steps],
         }
+        self._workflow = workflows_v1.Workflow(
+            source_contents=json.dumps(self.definition)
+        )
 
     @property
     def definition(self) -> dict:
         return {'main': self._content}
+
+    @property
+    def workflow(self) -> workflows_v1.Workflow:
+        return self._workflow
 
 
 class Workflow:
@@ -184,10 +206,10 @@ class Workflow:
         from the batch job definition. I don't know whether it's allowed for a workflow to
         contain jobs spanning regions.
         """
-        workflow = workflows_v1.Workflow(source_contents=json.dumps(config.definition))
+        validate_label_key(name)
         req = workflows_v1.CreateWorkflowRequest(
             parent=f'projects/{get_project_id()}/locations/{region}',
-            workflow=workflow,
+            workflow=config.workflow,
             workflow_id=name,
         )
         op = _call_workflow_client('create_workflow', req)

@@ -28,8 +28,6 @@ class TaskConfig:
             options: str | None = None,
             local_ssd_disk: JobConfig.LocalSSD | None = None,
             disk_mount_path: str = None,
-            gpu: JobConfig.GPU | None = None,
-            entrypoint: str = '/bin/bash',
             **kwargs,
         ):
             """
@@ -39,19 +37,15 @@ class TaskConfig:
                 The full tag of the image.
             commands
                 The commands to be run within the Docker container, such as 'python -m mypackage.mymodule --arg1 x --arg2 y'.
+                This is a single string that is run as a shell script. Inside the container, the command that is executed is
 
-                This is the command you would run if you are within the container.
+                    /bin/sh -c "<commands>"
+
+                This is the command you would type verbatim in the console inside the container.
             options
                 The option string to be applied to `docker run`, such as '-e NAME=abc --network host'. As this example shows,
                 environment variables that you want to be passed into the container are also handled by `options`.
-
-            With '/bin/bash' as `entrypoint`, `commands` may need to start with "-c".
-
-            You may want to consider including these in `options`: "--log-driver=gcplogs".
             """
-            # if not commands.startswith('-c '):
-            # commands = '-c ' + commands
-
             if options:
                 options = ' ' + options.strip() + ' '  # to help search in it
             else:
@@ -60,10 +54,14 @@ class TaskConfig:
                 options += ' --rm '
             if ' --init ' not in options:
                 options += '--init '
+            if ' --log-driver ' not in options and ' --log-driver=' not in options:
+                options += '--log-driver=gcplogs'
+                # TODO: what does this do? is this necessary?
 
-            if gpu:
-                if ' --runtime=nvidia ' not in options:
-                    options = options + '--runtime=nvidia '
+            # if gpu:
+            #     if ' --runtime=nvidia ' not in options:
+            #         options = options + '--runtime=nvidia '
+            # TODO: add this back after gpu container is figured out
 
             if local_ssd_disk is not None:
                 volumes = [
@@ -77,9 +75,9 @@ class TaskConfig:
                 options = None
             self._container = batch_v1.Runnable.Container(
                 image_uri=image_uri,
-                commands=[commands],
+                commands=['-c', commands],
                 options=options,
-                entrypoint=entrypoint,
+                entrypoint='/bin/sh',
                 volumes=volumes,
                 **kwargs,
             )
@@ -93,16 +91,12 @@ class TaskConfig:
         *,
         container: dict,
         max_run_duration_seconds: int | None = None,
-        max_retry_count: int | None = None,
-        ignore_exit_status: bool | None = None,
-        always_run: bool | None = None,
+        max_retry_count: int = 0,
+        ignore_exit_status: bool = False,
+        always_run: bool = False,
         local_ssd_disk: JobConfig.LocalSSD | None = None,
         **kwargs,
     ):
-        if ignore_exit_status is None:
-            ignore_exit_status = False
-        if always_run is None:
-            always_run = False
         container = self.Container(**container, local_ssd_disk=local_ssd_disk)
         runnable = batch_v1.Runnable(
             container=container.container,
@@ -118,7 +112,7 @@ class TaskConfig:
         self._task_spec = batch_v1.TaskSpec(
             runnables=[runnable],
             max_run_duration=max_run_duration,
-            max_retry_count=max_retry_count or 0,
+            max_retry_count=max_retry_count,
             volumes=None if local_ssd_disk is None else [local_ssd_disk.volume],
             **kwargs,
         )
@@ -136,14 +130,15 @@ class JobConfig:
             self,
             *,
             size_gb: int,
-            disk_type: Literal['pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard']
-            | None = None,
-            image: str | None = None,
+            disk_type: Literal[
+                'pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard'
+            ] = 'pd-balanced',
+            image: str = 'batch-cos',
         ):
             assert size_gb >= 30
             self.size_gb = size_gb
-            self.type_ = disk_type or 'pd-balanced'
-            self.image = image or 'batch-cos'
+            self.type_ = disk_type
+            self.image = image
 
         @property
         def disk(self) -> batch_v1.AllocationPolicy.Disk:
@@ -163,9 +158,9 @@ class JobConfig:
             self,
             *,
             size_gb: int,
-            device_name: str | None = None,
-            mount_path: str | None = None,
-            access_mode: Literal['ro', 'rw'] | None = None,
+            device_name: str = 'local-ssd',
+            mount_path: str = '/mnt',
+            access_mode: Literal['ro', 'rw'] = 'rw',
         ):
             """
             `size_gb` should be a multiple of 375. If not,
@@ -190,9 +185,9 @@ class JobConfig:
                     )
 
             self.size_gb = size_gb
-            self.device_name = device_name or 'local-ssd'
-            self.mount_path = mount_path or '/mnt'
-            self.access_mode = access_mode or 'rw'
+            self.device_name = device_name
+            self.mount_path = mount_path
+            self.access_mode = access_mode
 
         @property
         def disk(self) -> batch_v1.AllocationPolicy.AttachedDisk:
@@ -235,10 +230,10 @@ class JobConfig:
         cls,
         *,
         task_spec: dict,
-        task_count: int | None = None,
-        task_count_per_node: int | None = None,
+        task_count: int = 1,
+        task_count_per_node: int = 1,
         parallelism: int | None = None,
-        permissive_ssh: bool | None = None,
+        permissive_ssh: bool = True,
         **kwargs,
     ) -> batch_v1.TaskGroup:
         """
@@ -251,14 +246,12 @@ class JobConfig:
         parallelism
             Number of tasks that can be running across all nodes at any time.
         """
-        if permissive_ssh is None:
-            permissive_ssh = True
         task_spec = TaskConfig(**task_spec).task_spec
         return batch_v1.TaskGroup(
             task_spec=task_spec,
-            task_count=task_count or 1,
+            task_count=task_count,
             parallelism=parallelism,
-            task_count_per_node=task_count_per_node or 1,
+            task_count_per_node=task_count_per_node,
             permissive_ssh=permissive_ssh,
             **kwargs,
         )
@@ -272,10 +265,11 @@ class JobConfig:
         network_uri: str,
         subnet_uri: str,
         machine_type: str,
-        no_external_ip_address: bool | None = None,
-        provisioning_model: Literal['standard', 'spot', 'preemptible'] | None = None,
-        boot_disk: BootDisk | None = None,
+        no_external_ip_address: bool = True,
+        provisioning_model: Literal['standard', 'spot', 'preemptible'] = 'standard',
+        boot_disk: dict | None = None,
         gpu: GPU | None = None,
+        install_gpu_drivers: bool | None = None,
         local_ssd_disk: LocalSSD | None = None,
         **kwargs,
     ) -> batch_v1.AllocationPolicy:
@@ -289,11 +283,6 @@ class JobConfig:
         subnet_uri
             Could be like this: 'https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01'
         """
-        if no_external_ip_address is None:
-            no_external_ip_address = True
-        if provisioning_model is None:
-            provisioning_model = 'standard'
-
         network = batch_v1.AllocationPolicy.NetworkInterface(
             network=network_uri,
             subnetwork=subnet_uri,
@@ -302,6 +291,9 @@ class JobConfig:
         provisioning_model = getattr(
             batch_v1.AllocationPolicy.ProvisioningModel, provisioning_model.upper()
         )
+
+        if boot_disk:
+            boot_disk = cls.BootDisk(**boot_disk)
 
         instance_policy = batch_v1.AllocationPolicy.InstancePolicy(
             machine_type=machine_type,
@@ -312,6 +304,7 @@ class JobConfig:
         )
         instance_policy_template = batch_v1.AllocationPolicy.InstancePolicyOrTemplate(
             policy=instance_policy,
+            install_gpu_drivers=install_gpu_drivers,
         )
 
         return batch_v1.AllocationPolicy(
@@ -347,18 +340,14 @@ class JobConfig:
         allocation_policy: dict,
         labels: dict[str, str] | None = None,
         logs_policy: batch_v1.LogsPolicy | None = None,
-        boot_disk: dict | None = None,
-        local_ssd: dict | None = None,
         gpu: dict | None = None,
+        local_ssd: dict | None = None,
         **kwargs,
     ):
         if gpu:
             gpu = self.GPU(**gpu)
-            assert 'gpu' not in task_group['task_spec']['container']
-            task_group['task_spec']['container']['gpu'] = gpu
-
-        if boot_disk:
-            boot_disk = self.BootDisk(**boot_disk)
+            # assert 'gpu' not in task_group['task_spec']['container']
+            # task_group['task_spec']['container']['gpu'] = gpu
 
         if local_ssd:
             local_ssd_disk = self.LocalSSD(**local_ssd)
@@ -372,7 +361,6 @@ class JobConfig:
         task_group = self.task_group(**task_group)
         allocation_policy = self.allocation_policy(
             gpu=gpu,
-            boot_disk=boot_disk,
             local_ssd_disk=local_ssd_disk,
             labels=labels,
             **allocation_policy,
@@ -393,6 +381,13 @@ class JobConfig:
     @property
     def job(self) -> batch_v1.Job:
         return self._job
+
+    @property
+    def definition(self) -> dict:
+        # `self._job.__str__` actually is formatted nicely,
+        # but we choose to return the built-in dict type.
+        # If you want a nice printout, just print `self.job`.
+        return type(self._job).to_dict(self._job)
 
     @property
     def region(self) -> str:
@@ -454,6 +449,12 @@ class Job:
     @property
     def name(self) -> str:
         return self._name
+
+    @property
+    def definition(self) -> dict:
+        if self._job is None:
+            self._refresh()
+        return type(self._job).to_dict(self._job)
 
     def _refresh(self):
         req = batch_v1.GetJobRequest(name=self.name)
