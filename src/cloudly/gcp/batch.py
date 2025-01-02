@@ -17,7 +17,6 @@ from google.protobuf.duration_pb2 import Duration
 from .auth import get_credentials, get_project_id, get_service_account_email
 from .compute import basic_resource_labels, validate_label_key, validate_label_value
 
-
 # Using GPUs
 #
 # See https://www.googlecloudcommunity.com/gc/Infrastructure-Compute-Storage/GCP-Batch-use-NVDIA-GPU-to-train-models-what-installation-are/m-p/784063
@@ -472,7 +471,7 @@ class Job:
 
     def __str__(self):
         return self.__repr__()
-    
+
     def _refresh(self):
         req = batch_v1.GetJobRequest(name=self.name)
         self._job = _call_client('get_job', req)
@@ -491,7 +490,7 @@ class Job:
     def create_time(self):
         self._ensure_job()
         return self._job.create_time
-    
+
     @property
     def update_time(self):
         self._ensure_job()
