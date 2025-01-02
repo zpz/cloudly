@@ -29,7 +29,6 @@ class TaskConfig:
             local_ssd_disk: JobConfig.LocalSSD | None = None,
             disk_mount_path: str = None,
             gpu: JobConfig.GPU | None = None,
-            entrypoint: str = '/bin/bash',
             **kwargs,
         ):
             """
@@ -39,17 +38,15 @@ class TaskConfig:
                 The full tag of the image.
             commands
                 The commands to be run within the Docker container, such as 'python -m mypackage.mymodule --arg1 x --arg2 y'.
+                This is a single string that is run as a shell script. Inside the container, the command that is executed is
 
-                This is the command you would run if you are within the container.
+                    /bin/sh -c "<commands>"
+
+                This is the command you would type verbatim in the console inside the container.
             options
                 The option string to be applied to `docker run`, such as '-e NAME=abc --network host'. As this example shows,
                 environment variables that you want to be passed into the container are also handled by `options`.
-
-            With '/bin/bash' as `entrypoint`, `commands` may need to start with "-c".
             """
-            # if not commands.startswith('-c '):
-            # commands = '-c ' + commands
-
             if options:
                 options = ' ' + options.strip() + ' '  # to help search in it
             else:
@@ -62,9 +59,10 @@ class TaskConfig:
                 options += '--log-driver=gcplogs'
                 # TODO: what does this do? is this necessary?
 
-            if gpu:
-                if ' --runtime=nvidia ' not in options:
-                    options = options + '--runtime=nvidia '
+            # if gpu:
+            #     if ' --runtime=nvidia ' not in options:
+            #         options = options + '--runtime=nvidia '
+            # TODO: add this back after gpu container is figured out
 
             if local_ssd_disk is not None:
                 volumes = [
@@ -78,9 +76,9 @@ class TaskConfig:
                 options = None
             self._container = batch_v1.Runnable.Container(
                 image_uri=image_uri,
-                commands=[commands],
+                commands=['-c', commands],
                 options=options,
-                entrypoint=entrypoint,
+                entrypoint='/bin/sh',
                 volumes=volumes,
                 **kwargs,
             )
