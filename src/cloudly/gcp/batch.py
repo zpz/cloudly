@@ -18,6 +18,45 @@ from .auth import get_credentials, get_project_id, get_service_account_email
 from .compute import basic_resource_labels, validate_label_key, validate_label_value
 
 
+# Using GPUs
+#
+# See https://www.googlecloudcommunity.com/gc/Infrastructure-Compute-Storage/GCP-Batch-use-NVDIA-GPU-to-train-models-what-installation-are/m-p/784063
+#
+# One scenario that seemed to work:
+#
+#    allocation_policy
+#        machine_type: 'n1-standard-16'
+#        boot_disk: {'size_gb': 50, 'image': 'batch-debian'}
+#        install_gpu_drivers: True
+#    gpu: {'gpu_type': 'nvidia-tesla-4', 'gpu_count': 1}
+#    task_group:
+#        task_spec:
+#            container:
+#                image_uri: <ubuntu 20.04 image>
+#                commands: 'nvidia-smi'
+#                options: '--rm --init'
+#
+# Test reported success, so at least the command `nvidia-smi` was present in the container.
+# `install_gpu_drivers=True` was necessary in the test.
+#
+# Another scenario that seemed to work:
+#
+#    allocation_policy
+#        machine_type: 'g2-standard-16'
+#        boot_disk: {'size_gb': 50, 'image': 'batch-debian'}
+#        install_gpu_drivers: True
+#    task_group:
+#        task_spec:
+#            container:
+#                image_uri: <ubuntu 20.04 image>
+#                commands: 'nvidia-smi'
+#                options: '--rm --init'
+#
+# The g2 machine comes with GPUs. `install_gpu_drivers=True` was necessary.
+# Note the absence of `gpu: {...}` setting.
+# Also note that `--runtime=nvidia` was not accepted, whereas `--gpus=all` was not necessary.
+
+
 class TaskConfig:
     class Container:
         def __init__(
@@ -45,23 +84,9 @@ class TaskConfig:
             options
                 The option string to be applied to `docker run`, such as '-e NAME=abc --network host'. As this example shows,
                 environment variables that you want to be passed into the container are also handled by `options`.
-            """
-            if options:
-                options = ' ' + options.strip() + ' '  # to help search in it
-            else:
-                options = ''
-            if ' --rm ' not in options:
-                options += ' --rm '
-            if ' --init ' not in options:
-                options += '--init '
-            if ' --log-driver ' not in options and ' --log-driver=' not in options:
-                options += '--log-driver=gcplogs'
-                # TODO: what does this do? is this necessary?
 
-            # if gpu:
-            #     if ' --runtime=nvidia ' not in options:
-            #         options = options + '--runtime=nvidia '
-            # TODO: add this back after gpu container is figured out
+                Usually `options` should contain '--rm --init --log-driver=gcplogs', among others.
+            """
 
             if local_ssd_disk is not None:
                 volumes = [
@@ -70,9 +95,6 @@ class TaskConfig:
             else:
                 volumes = None
 
-            options = options.strip()
-            if not options:
-                options = None
             self._container = batch_v1.Runnable.Container(
                 image_uri=image_uri,
                 commands=['-c', commands],
@@ -133,8 +155,12 @@ class JobConfig:
             disk_type: Literal[
                 'pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard'
             ] = 'pd-balanced',
-            image: str = 'batch-cos',
+            image: str | None = None,
         ):
+            """
+            `image`: 'batch-debian' seems to be a good value for GPUs; otherwise `batch-cos` may
+                also work well. Leave it at `None` until needed.
+            """
             assert size_gb >= 30
             self.size_gb = size_gb
             self.type_ = disk_type
@@ -212,7 +238,8 @@ class JobConfig:
     class GPU:
         def __init__(self, *, gpu_type: str, gpu_count: int):
             """
-            `gpu_type`: values like 'nvidia-tesla-t4', 'nvidia-tesla-v100', etc.
+            Use `gcloud compute accelerator-types list` to see valid values of `gpu_type`.
+            Some examples: 'nvidia-tesla-t4', 'nvidia-l4', 'nvidia-tesla-a100', 'nvidia-tesla-v100'
             """
             assert gpu_type
             assert gpu_count
@@ -445,20 +472,35 @@ class Job:
 
     def __str__(self):
         return self.__repr__()
+    
+    def _refresh(self):
+        req = batch_v1.GetJobRequest(name=self.name)
+        self._job = _call_client('get_job', req)
+        return self
+
+    def _ensure_job(self):
+        if self._job is None:
+            self._refresh()
+        return self
 
     @property
     def name(self) -> str:
         return self._name
 
     @property
-    def definition(self) -> dict:
-        if self._job is None:
-            self._refresh()
-        return type(self._job).to_dict(self._job)
+    def create_time(self):
+        self._ensure_job()
+        return self._job.create_time
+    
+    @property
+    def update_time(self):
+        self._ensure_job()
+        return self._job.update_time
 
-    def _refresh(self):
-        req = batch_v1.GetJobRequest(name=self.name)
-        self._job = _call_client('get_job', req)
+    @property
+    def definition(self) -> dict:
+        self._ensure_job()
+        return type(self._job).to_dict(self._job)
 
     def status(self) -> batch_v1.JobStatus:
         """
