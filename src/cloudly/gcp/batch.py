@@ -29,6 +29,7 @@ class TaskConfig:
             local_ssd_disk: JobConfig.LocalSSD | None = None,
             disk_mount_path: str = None,
             gpu: JobConfig.GPU | None = None,
+            entrypoint: str = '/bin/bash',
             **kwargs,
         ):
             """
@@ -43,9 +44,13 @@ class TaskConfig:
             options
                 The option string to be applied to `docker run`, such as '-e NAME=abc --network host'. As this example shows,
                 environment variables that you want to be passed into the container are also handled by `options`.
+
+            With '/bin/bash' as `entrypoint`, `commands` may need to start with "-c".
+
+            You may want to consider including these in `options`: "--log-driver=gcplogs".
             """
-            if not commands.startswith('-c '):
-                commands = '-c ' + commands
+            # if not commands.startswith('-c '):
+                # commands = '-c ' + commands
 
             if options:
                 options = ' ' + options.strip() + ' '  # to help search in it
@@ -59,10 +64,6 @@ class TaskConfig:
             if gpu:
                 if ' --runtime=nvidia ' not in options:
                     options = options + '--runtime=nvidia '
-
-            if ' --log-driver ' not in options and ' --log-driver=' not in options:
-                options += '--log-driver=gcplogs '
-            # TODO: is this necessary? is this enough by itself?
 
             if local_ssd_disk is not None:
                 volumes = [
@@ -78,7 +79,7 @@ class TaskConfig:
                 image_uri=image_uri,
                 commands=[commands],
                 options=options,
-                entrypoint='/bin/bash',
+                entrypoint=entrypoint,
                 volumes=volumes,
                 **kwargs,
             )
@@ -405,7 +406,7 @@ def _call_client(method: str, *args, **kwargs):
 
 class Job:
     @classmethod
-    def create(cls, *, name: str, config: JobConfig) -> Job:
+    def create(cls, name: str, config: JobConfig) -> Job:
         """
         There are some restrictions on the form of `name`; see GCP doc for details.
         In addition, the batch name must be unique. For this reason, user may want to construct the name

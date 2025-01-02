@@ -147,6 +147,7 @@ class BatchStep(Step):
         self.job_url = f'https://batch.googleapis.com/v1/{parent}/jobs/{job_id}'
         self.job_id = job_id
         self.result_name = result_name
+        self.region = config.region
 
 
 class WorkflowConfig:
@@ -171,9 +172,9 @@ class Workflow:
     @classmethod
     def create(
         cls,
-        *,
         name: str,
         config: WorkflowConfig,
+        *,
         region: str,
     ) -> Workflow:
         """
@@ -244,7 +245,7 @@ class Workflow:
         return self._workflow.update_time
 
     @property
-    def revision_id(self):
+    def revision_id(self) -> str:
         self._refresh()
         return self._workflow.revision_id
 
