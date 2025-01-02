@@ -10,7 +10,6 @@ __all__ = ['Job', 'JobConfig']
 
 import warnings
 from typing import Literal
-import json
 
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration

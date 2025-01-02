@@ -5,9 +5,9 @@ __all__ = ['Workflow', 'WorkflowConfig', 'Execution', 'Step', 'BatchStep']
 import atexit
 import datetime
 import json
+import string
 from collections.abc import Sequence
 from typing import Literal
-import string
 
 from google.cloud import workflows_v1
 from google.cloud.workflows import executions_v1
@@ -177,7 +177,9 @@ class WorkflowConfig:
             'params': ['args'],
             'steps': [s.definition for s in steps],
         }
-        self._workflow = workflows_v1.Workflow(source_contents=json.dumps(self.definition))
+        self._workflow = workflows_v1.Workflow(
+            source_contents=json.dumps(self.definition)
+        )
 
     @property
     def definition(self) -> dict:

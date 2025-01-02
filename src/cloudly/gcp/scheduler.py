@@ -6,8 +6,8 @@ from typing import Literal
 from google.cloud import scheduler_v1
 
 from .auth import get_credentials, get_project_id, get_service_account_email
-from .workflows import Workflow
 from .compute import validate_label_key
+from .workflows import Workflow
 
 
 def _call_client(method: str, *args, **kwargs):
