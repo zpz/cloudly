@@ -255,5 +255,9 @@ def get_calling_file() -> inspect.FrameInfo:
             # This is the Python interpreter.
             caller = s
             break
+        if s.function == '<module>':
+            # This is the case if the code has traced to the `if __name__ == '__main__'` block.
+            # I don't know if there are other possibilities.
+            break
         caller = s
     return caller
