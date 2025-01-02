@@ -130,7 +130,9 @@ class JobConfig:
             self,
             *,
             size_gb: int,
-            disk_type: Literal['pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard'] = 'pd-balanced',
+            disk_type: Literal[
+                'pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard'
+            ] = 'pd-balanced',
             image: str = 'batch-cos',
         ):
             assert size_gb >= 30

@@ -59,7 +59,10 @@ def basic_resource_labels():
 class InstanceConfig:
     class BootDisk:
         def __init__(
-            self, *, size_gb: int = 30, source_image: str = 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64',
+            self,
+            *,
+            size_gb: int = 30,
+            source_image: str = 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64',
         ):
             if size_gb:
                 assert size_gb >= 30, f'{size_gb} >= 30'
