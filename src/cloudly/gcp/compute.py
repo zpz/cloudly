@@ -125,7 +125,7 @@ class InstanceConfig:
             self.size_gb = size_gb  # GCP default is 30, but a GPU machine would require at least 40
             if source_image.count('/') == 1:
                 proj, fam = source_image.split('/')
-                source_image = f"projects/{proj}/global/images/family/{fam}"
+                source_image = f'projects/{proj}/global/images/family/{fam}'
             self.source_image = source_image
 
         @property
