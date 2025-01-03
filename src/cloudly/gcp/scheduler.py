@@ -61,7 +61,7 @@ class Job:
         if isinstance(name_or_obj, str):
             self.name = name_or_obj
             self.job = None
-            self.refresh()
+            self._refresh()
         else:
             self.name = name_or_obj.name
             self.job = name_or_obj
@@ -72,7 +72,7 @@ class Job:
     def __str__(self):
         return self.__repr__()
 
-    def refresh(self):
+    def _refresh(self):
         req = scheduler_v1.GetJobRequest(name=self.name)
         self.job = _call_client('get_job', req)
         return self
@@ -85,4 +85,4 @@ class Job:
     def state(
         self,
     ) -> Literal['ACTIVE', 'ENABLED', 'PAUSED', 'DISABLED', 'STATE_UNSPECIFIED']:
-        return self.job.state.name
+        return self._refresh().job.state.name

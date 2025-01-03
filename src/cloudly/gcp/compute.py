@@ -123,6 +123,9 @@ class InstanceConfig:
             if size_gb:
                 assert size_gb >= 30, f'{size_gb} >= 30'
             self.size_gb = size_gb  # GCP default is 30, but a GPU machine would require at least 40
+            if source_image.count('/') == 1:
+                proj, fam = source_image.split('/')
+                source_image = f'projects/{proj}/global/images/family/{fam}'
             self.source_image = source_image
 
         @property
@@ -350,7 +353,7 @@ class Instance:
         self.name = name
         self.zone = zone
         self.instance = None
-        self.refresh()
+        self._refresh()
 
     def __repr__(self):
         return f"{self.__class__.__name__}('{self.name}', '{self.zone}')"
@@ -358,7 +361,7 @@ class Instance:
     def __str__(self):
         return self.__repr__()
 
-    def refresh(self):
+    def _refresh(self):
         req = compute_v1.GetInstanceRequest(
             instance=self.name, project=get_project_id(), zone=self.zone
         )
@@ -396,12 +399,12 @@ class Instance:
 
     @property
     def last_start_timestamp(self) -> str:
-        return self.instance.last_start_timestamp
+        return self._refresh().instance.last_start_timestamp
 
     @property
     def last_stop_timestamp(self) -> str:
         # Can be ''.
-        return self.instance.last_stop_timestamp
+        return self._refresh().instance.last_stop_timestamp
 
     @property
     def ip(self) -> str:
@@ -430,4 +433,4 @@ class Instance:
         'REPAIRING',
         'TERMINATED',
     ]:
-        return self.instance.status
+        return self._refresh().instance.status

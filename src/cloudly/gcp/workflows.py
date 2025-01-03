@@ -231,7 +231,7 @@ class Workflow:
         if isinstance(name_or_obj, str):
             self.name = name_or_obj
             self.workflow = None
-            self.refresh()
+            self._refresh()
         else:
             self.name = name_or_obj.name
             self.workflow = name_or_obj
@@ -242,7 +242,7 @@ class Workflow:
     def __str__(self):
         return self.__repr__()
 
-    def refresh(self):
+    def _refresh(self):
         req = workflows_v1.GetWorkflowRequest(name=self.name)
         self.workflow = _call_workflow_client('get_workflow', req)
         return self
@@ -261,14 +261,14 @@ class Workflow:
 
     @property
     def update_time(self) -> datetime.datetime:
-        return self.workflow.update_time
+        return self._refresh().workflow.update_time
 
     @property
     def revision_id(self) -> str:
-        return self.workflow.revision_id
+        return self._refresh().workflow.revision_id
 
     def state(self) -> Literal['STATE_UNSPECIFIED', 'ACTIVE', 'UNAVAILABLE']:
-        return self.workflow.state.name
+        return self._refresh().workflow.state.name
 
     def update(self, config: WorkflowConfig):
         self.workflow.source_contents = json.dumps(config.definition)
@@ -284,7 +284,7 @@ class Workflow:
             exe = executions_v1.Execution()
         req = executions_v1.CreateExecutionRequest(parent=self.name, execution=exe)
         resp = _call_execution_client('create_execution', req)
-        self.refresh()
+        self._refresh()
         return Execution(resp)
 
     def delete(self) -> None:
@@ -303,7 +303,7 @@ class Execution:
         if isinstance(name_or_obj, str):
             self.name = name_or_obj
             self.execution = None
-            self.refresh()
+            self._refresh()
         else:
             self.name = name_or_obj.name
             self.execution = name_or_obj
@@ -314,7 +314,7 @@ class Execution:
     def __str__(self):
         return self.__repr__()
 
-    def refresh(self):
+    def _refresh(self):
         req = executions_v1.GetExecutionRequest(name=self.name)
         self.execution = _call_execution_client('get_execution', req)
         return self
@@ -326,18 +326,18 @@ class Execution:
     @property
     def end_time(self) -> datetime.datetime:
         # If not finished (`state()` returns "ACTIVE"), this returns `None`.
-        return self.execution.end_time
+        return self._refresh().execution.end_time
 
     @property
     def argument(self):
         return self.execution.argument
 
     def result(self):
-        return str(self.execution.result)
+        return str(self._refresh().execution.result)
 
     def status(self):
         # If still running, this returns which step is currently running.
-        return self.execution.status
+        return self._refresh().execution.status
 
     def state(
         self,
@@ -350,9 +350,9 @@ class Execution:
         'UNAVAILABLE',
         'QUEUED',
     ]:
-        return self.execution.state.name
+        return self._refresh().execution.state.name
 
     def cancel(self):
         req = executions_v1.CancelExecutionRequest(name=self.name)
         _call_execution_client('cancel_execution', req)
-        self.refresh()
+        self._refresh()

@@ -65,7 +65,7 @@ class TaskConfig:
             commands: str,
             options: str | None = None,
             local_ssd_disk: JobConfig.LocalSSD | None = None,
-            disk_mount_path: str = None,
+            local_ssd_mount_path: str = None,
             **kwargs,
         ):
             """
@@ -89,7 +89,7 @@ class TaskConfig:
 
             if local_ssd_disk is not None:
                 volumes = [
-                    f'{local_ssd_disk.mount_path}:{disk_mount_path or local_ssd_disk.mount_path}:{local_ssd_disk.access_mode}'
+                    f'{local_ssd_disk.mount_path}:{local_ssd_mount_path or local_ssd_disk.mount_path}:{local_ssd_disk.mode}'
                 ]
             else:
                 volumes = None
@@ -98,7 +98,7 @@ class TaskConfig:
                 image_uri=image_uri,
                 commands=['-c', commands],
                 options=options,
-                entrypoint='/bin/sh',
+                entrypoint='/bin/bash',
                 volumes=volumes,
                 **kwargs,
             )
@@ -185,7 +185,7 @@ class JobConfig:
             size_gb: int,
             device_name: str = 'local-ssd',
             mount_path: str = '/mnt',
-            access_mode: Literal['ro', 'rw'] = 'rw',
+            mode: Literal['ro', 'rw'] = 'rw',
         ):
             """
             `size_gb` should be a multiple of 375. If not,
@@ -212,7 +212,7 @@ class JobConfig:
             self.size_gb = size_gb
             self.device_name = device_name
             self.mount_path = mount_path
-            self.access_mode = access_mode
+            self.mode = mode
 
         @property
         def disk(self) -> batch_v1.AllocationPolicy.AttachedDisk:
@@ -225,8 +225,8 @@ class JobConfig:
 
         @property
         def volume(self) -> batch_v1.Volume:
-            opts = ['async', self.access_mode]
-            if self.access_mode == 'ro':
+            opts = ['async', self.mode]
+            if self.mode == 'ro':
                 opts.append('noload')
             return batch_v1.Volume(
                 device_name=self.device_name,
@@ -462,7 +462,7 @@ class Job:
         if isinstance(name_or_obj, str):
             self.name = name_or_obj
             self.job = None
-            self.refresh()
+            self._refresh()
         else:
             self.name = name_or_obj.name
             self.job = name_or_obj
@@ -473,7 +473,7 @@ class Job:
     def __str__(self):
         return self.__repr__()
 
-    def refresh(self):
+    def _refresh(self):
         req = batch_v1.GetJobRequest(name=self.name)
         self.job = _call_client('get_job', req)
         return self
@@ -484,7 +484,7 @@ class Job:
 
     @property
     def update_time(self):
-        return self.job.update_time
+        return self._refresh().job.update_time
 
     @property
     def definition(self) -> dict:
@@ -495,7 +495,7 @@ class Job:
         The returned `JobStatus` object has some useful attributes you can access;
         see :meth:`state` for an example.
         """
-        return self.job.status
+        return self._refresh().job.status
 
     def state(
         self,
