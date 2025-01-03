@@ -95,7 +95,7 @@ def basic_resource_labels():
 # Taken from
 #   https://github.com/GoogleCloudPlatform/compute-gpu-installation
 # not working yet
-cuda_installer = '''
+cuda_installer = """
 #!/bin/bash
 if test -f /opt/google/cuda-installer
 then
@@ -107,7 +107,7 @@ cd /opt/google/cuda-installer/ || exit
 
 sudo curl -fSsL -O https://github.com/GoogleCloudPlatform/compute-gpu-installation/releases/download/cuda-installer-v1.2.0/cuda_installer.pyz
 sudo python3 cuda_installer.pyz install_cuda
-'''
+"""
 
 
 class InstanceConfig:
@@ -140,7 +140,7 @@ class InstanceConfig:
         def startup_script(self) -> str:
             if self.source_image.startswith('projects/deeplearning-platform-release'):
                 if '-gpu' in self.source_image or '-cu' in self.source_image:
-                    return "sudo /opt/deeplearning/install-driver.sh"
+                    return 'sudo /opt/deeplearning/install-driver.sh'
             return ''
 
     class LocalSSD:
@@ -196,8 +196,7 @@ class InstanceConfig:
                 'sudo mkfs.ext4 -F /dev/disk/by-id/google-local-nvme-ssd-0',
                 f'sudo mkdir -p {self.mount_path}',
                 f'sudo mount /dev/disk/by-id/google-local-nvme-ssd-0 {self.mount_path}',
-                f'sudo chmod a+{mode} {self.mount_path}'
-                ''
+                f'sudo chmod a+{mode} {self.mount_path}' '',
             )
 
     class GPU:
@@ -252,7 +251,7 @@ class InstanceConfig:
 
         startup_scripts = []
         disks = []
-        
+
         boot_disk = self.BootDisk(**(boot_disk or {}))
         startup_scripts.append(boot_disk.startup_script)
         disks.append(boot_disk.disk)
@@ -268,7 +267,9 @@ class InstanceConfig:
         if machine_type.split('-')[0] in ('a3', 'a2', 'g2'):
             # machine types that come with GPUs
             if gpu is not None:
-                raise ValueError(f"machine_type {machine_type} comes with GPUs; you should not specify `gpu` again")
+                raise ValueError(
+                    f'machine_type {machine_type} comes with GPUs; you should not specify `gpu` again'
+                )
             scheduling = compute_v1.Scheduling(on_host_maintenance='TERMINATE')
         elif gpu:
             gpu = self.GPU(**gpu)
@@ -315,11 +316,10 @@ class InstanceConfig:
     def instance(self) -> compute_v1.Instance:
         # printing the output to see info.
         return self._instance
-    
+
     @property
     def definition(self) -> dict:
         return type(self._instance).to_dict(self._instance)
-
 
 
 def _call_client(method: str, *args, **kwargs):
@@ -387,18 +387,17 @@ class Instance:
                 'index': disk.index,
                 'mode': disk.mode,
             }
-            for disk in
-            self.instance.disks
+            for disk in self.instance.disks
         ]  # first is boot disk
 
     @property
     def creation_timestamp(self) -> str:
         return self.instance.creation_timestamp
-    
+
     @property
     def last_start_timestamp(self) -> str:
         return self.instance.last_start_timestamp
-    
+
     @property
     def last_stop_timestamp(self) -> str:
         # Can be ''.

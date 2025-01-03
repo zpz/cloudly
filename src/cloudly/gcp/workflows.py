@@ -356,4 +356,3 @@ class Execution:
         req = executions_v1.CancelExecutionRequest(name=self.name)
         _call_execution_client('cancel_execution', req)
         self.refresh()
-

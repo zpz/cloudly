@@ -514,4 +514,3 @@ class Job:
         req = batch_v1.DeleteJobRequest(name=self.name)
         _call_client('delete_job', req)
         self.job = None
-
