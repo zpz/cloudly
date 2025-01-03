@@ -450,7 +450,7 @@ class Job:
         jobs = _call_client('list_jobs', req)
         return [cls(j) for j in jobs]
 
-    def __init__(self, name: str | batch_v1.Job, /):
+    def __init__(self, name_or_obj: str | batch_v1.Job, /):
         """
         `name` is like 'projects/<project-id>/locations/<location>/jobs/<name>'.
         This can also be considered the job "ID" or "URI".
@@ -459,12 +459,13 @@ class Job:
         `job` is not needed because it can be created if needed.
         It is accepted in case you already have it. See :meth:`create`, :meth:`list`.
         """
-        if isinstance(name, str):
-            self._name = name
-            self._job = None
+        if isinstance(name_or_obj, str):
+            self.name = name_or_obj
+            self.job = None
+            self.refresh()
         else:
-            self._name = name.name
-            self._job = name
+            self.name = name_or_obj.name
+            self.job = name_or_obj
 
     def __repr__(self):
         return f"{self.__class__.__name__}('{self.name}')"
@@ -472,42 +473,29 @@ class Job:
     def __str__(self):
         return self.__repr__()
 
-    def _refresh(self):
+    def refresh(self):
         req = batch_v1.GetJobRequest(name=self.name)
-        self._job = _call_client('get_job', req)
+        self.job = _call_client('get_job', req)
         return self
-
-    def _ensure_job(self):
-        if self._job is None:
-            self._refresh()
-        return self
-
-    @property
-    def name(self) -> str:
-        return self._name
 
     @property
     def create_time(self):
-        self._ensure_job()
-        return self._job.create_time
+        return self.job.create_time
 
     @property
     def update_time(self):
-        self._ensure_job()
-        return self._job.update_time
+        return self.job.update_time
 
     @property
     def definition(self) -> dict:
-        self._ensure_job()
-        return type(self._job).to_dict(self._job)
+        return type(self.job).to_dict(self.job)
 
     def status(self) -> batch_v1.JobStatus:
         """
         The returned `JobStatus` object has some useful attributes you can access;
         see :meth:`state` for an example.
         """
-        self._refresh()
-        return self._job.status
+        return self.job.status
 
     def state(
         self,
@@ -525,3 +513,5 @@ class Job:
     def delete(self) -> None:
         req = batch_v1.DeleteJobRequest(name=self.name)
         _call_client('delete_job', req)
+        self.job = None
+
