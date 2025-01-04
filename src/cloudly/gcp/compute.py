@@ -203,12 +203,14 @@ class InstanceConfig:
             mode = self.mode
             if mode == 'ro':
                 mode = 'r'
-            return '\n'.join((
-                'sudo mkfs.ext4 -F /dev/disk/by-id/google-local-nvme-ssd-0',
-                f'sudo mkdir -p {self.mount_path}',
-                f'sudo mount /dev/disk/by-id/google-local-nvme-ssd-0 {self.mount_path}',
-                f'sudo chmod a+{mode} {self.mount_path}' '',
-            ))
+            return '\n'.join(
+                (
+                    'sudo mkfs.ext4 -F /dev/disk/by-id/google-local-nvme-ssd-0',
+                    f'sudo mkdir -p {self.mount_path}',
+                    f'sudo mount /dev/disk/by-id/google-local-nvme-ssd-0 {self.mount_path}',
+                    f'sudo chmod a+{mode} {self.mount_path}' '',
+                )
+            )
 
     class GPU:
         def __init__(self, *, gpu_type: str, gpu_count: int):

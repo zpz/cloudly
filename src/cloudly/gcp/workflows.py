@@ -128,55 +128,61 @@ class BatchStep(Step):
         result_name = name.replace('-', '_') + '_result'
         validate_identifier_name(result_name)
         steps = []
-        steps.append({
-            'log_create': {
-                'call': 'sys.log',
-                'args': {
-                    'data': f'${{"creating and running the batch job " + {job_id}}}'
-                }
-            }
-        })
-        steps.append({
-            'create_job': {
-                'call': 'googleapis.batch.v1.projects.locations.jobs.create',
-                'args': {
-                    'parent': parent,
-                    'jobId': job_id,
-                    'body': job_config,
-                },
-                'result': result_name,  # This "result" seems to be the entire batch-job config
-            }
-        })  # This uses Workflow's batch "connector" to create and run the batch job, waiting for its completion.
-        steps.append({
-            'log_create_result': {
-                'call': 'sys.log',
-                'args': {
-                    'data': f'${{"result of batch job " + {job_id} + ": " + {result_name}}}'
-                }
-            }
-        })
-        if delete_batch_job:
-            # TODO: how to delete only on batch success?
-            steps.append({
-                'log_delete': {
+        steps.append(
+            {
+                'log_create': {
                     'call': 'sys.log',
                     'args': {
-                        'data': f'${{"deleting the batch job " + {job_id}}}'
-                    }
-                }
-            })
-            steps.append({
-                'delete_job': {
-                    'call': 'googleapis.batch.v1.projects.locations.jobs.delete',
-                    'args': {
-                        'name': f'{parent}/jobs/{job_id}',
+                        'data': f'${{"creating and running the batch job " + {job_id}}}'
                     },
                 }
-            })
+            }
+        )
+        steps.append(
+            {
+                'create_job': {
+                    'call': 'googleapis.batch.v1.projects.locations.jobs.create',
+                    'args': {
+                        'parent': parent,
+                        'jobId': job_id,
+                        'body': job_config,
+                    },
+                    'result': result_name,  # This "result" seems to be the entire batch-job config
+                }
+            }
+        )  # This uses Workflow's batch "connector" to create and run the batch job, waiting for its completion.
+        steps.append(
+            {
+                'log_create_result': {
+                    'call': 'sys.log',
+                    'args': {
+                        'data': f'${{"result of batch job " + {job_id} + ": " + {result_name}}}'
+                    },
+                }
+            }
+        )
+        if delete_batch_job:
+            # TODO: how to delete only on batch success?
+            steps.append(
+                {
+                    'log_delete': {
+                        'call': 'sys.log',
+                        'args': {'data': f'${{"deleting the batch job " + {job_id}}}'},
+                    }
+                }
+            )
+            steps.append(
+                {
+                    'delete_job': {
+                        'call': 'googleapis.batch.v1.projects.locations.jobs.delete',
+                        'args': {
+                            'name': f'{parent}/jobs/{job_id}',
+                        },
+                    }
+                }
+            )
 
-        content = {
-            'steps': steps
-        }
+        content = {'steps': steps}
 
         # `job_id`` requirement: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$  Note in particular: doesn't allow underscore.
         # `result` name must be a valid variable (or identifier) name, e.g. it can't contain dash.
