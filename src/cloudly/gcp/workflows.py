@@ -104,12 +104,10 @@ class Step:
         return {self.name: self._content}
 
 
-class ParallelStep(Step):
-    pass
-
-
 class BatchStep(Step):
     """
+    Running a Batch job using Workflows.
+
     See
       https://atamel.dev/posts/2023/05-30_workflows_batch_connector/
       https://cloud.google.com/workflows/docs/reference/googleapis/batch/Overview
@@ -121,7 +119,7 @@ class BatchStep(Step):
         name: str,
         config: BatchJobConfig,
         *,
-        keep_batch_job: bool = False,
+        delete_batch_job: bool = True,
     ):
         validate_label_key(name)
         job_config = json.loads(type(config.job).to_json(config.job))
@@ -129,30 +127,62 @@ class BatchStep(Step):
         parent = f'projects/{get_project_id()}/locations/{config.region}'
         result_name = name.replace('-', '_') + '_result'
         validate_identifier_name(result_name)
-        create_job = {
-            'call': 'googleapis.batch.v1.projects.locations.jobs.create',
-            'args': {
-                'parent': parent,
-                'jobId': job_id,
-                'body': job_config,
-            },
-            'result': result_name,
-        }
-        if keep_batch_job:
-            content = create_job
-        else:
-            delete_job = {
-                'call': 'googleapis.batch.v1.projects.locations.jobs.delete',
-                'args': {
-                    'name': f'{parent}/jobs/{job_id}',
-                },
+        steps = []
+        steps.append(
+            {
+                'log_create': {
+                    'call': 'sys.log',
+                    'args': {
+                        'data': f'${{"creating and running the batch job " + {job_id}}}'
+                    },
+                }
             }
-            content = {
-                'steps': [
-                    {'create_job': create_job},
-                    {'delete_job': delete_job},
-                ]
+        )
+        steps.append(
+            {
+                'create_job': {
+                    'call': 'googleapis.batch.v1.projects.locations.jobs.create',
+                    'args': {
+                        'parent': parent,
+                        'jobId': job_id,
+                        'body': job_config,
+                    },
+                    'result': result_name,  # This "result" seems to be the entire batch-job config
+                }
             }
+        )  # This uses Workflow's batch "connector" to create and run the batch job, waiting for its completion.
+        steps.append(
+            {
+                'log_create_result': {
+                    'call': 'sys.log',
+                    'args': {
+                        'data': f'${{"result of batch job " + {job_id} + ": " + {result_name}}}'
+                    },
+                }
+            }
+        )
+        if delete_batch_job:
+            # TODO: how to delete only on batch success?
+            steps.append(
+                {
+                    'log_delete': {
+                        'call': 'sys.log',
+                        'args': {'data': f'${{"deleting the batch job " + {job_id}}}'},
+                    }
+                }
+            )
+            steps.append(
+                {
+                    'delete_job': {
+                        'call': 'googleapis.batch.v1.projects.locations.jobs.delete',
+                        'args': {
+                            'name': f'{parent}/jobs/{job_id}',
+                        },
+                    }
+                }
+            )
+
+        content = {'steps': steps}
 
         # `job_id`` requirement: ^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$  Note in particular: doesn't allow underscore.
         # `result` name must be a valid variable (or identifier) name, e.g. it can't contain dash.
@@ -160,7 +190,7 @@ class BatchStep(Step):
         # I made changes to both and it still worked.
         super().__init__(name, content)
         self.job_url = f'https://batch.googleapis.com/v1/{parent}/jobs/{job_id}'
-        self.job_id = job_id
+        self.job_id = job_id  # If you keep the batch job, then this might be the ID to use for tracking.
         self.result_name = result_name
         self.region = config.region
 
@@ -169,9 +199,12 @@ class WorkflowConfig:
     def __init__(self, steps: Sequence[Step]):
         """
         If your workflow requires command-line arguments, you should access individual arguments
-        using `dot`, for example, "args.name", "args.age".
+        using `dot` notation, for example, "args.name", "args.age".
         Correspondingly in :meth:`Workflow.execute`, you need to pass a dict to `args`,
         e.g. `{'name': 'Tom', 'age': 38}`.
+
+        The 'params' is provided whether your job needs it. If not needed,
+        don't provide args in :meth:`Workflow.execute` and use use it in the workflow "steps".
         """
         self._content = {
             'params': ['args'],

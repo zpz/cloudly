@@ -87,16 +87,26 @@ def basic_resource_labels():
 # You can also specify flexible machine_type and GPUs but use a Deeplearning boot image to ease the installation
 # of Nvidia drivers. The following gets a machine with two T4 GPUs:
 #
-#   machine_type: 'n1-standard-8
+#   machine_type: 'n1-standard-8'
 #   gpu: {'gpu_count': 2, 'gpu_type': 'nvidia-tesla-t4'}
 #   boot_disk: {'size_gb': 100, 'source_image': 'projects/deeplearning-platform-release/global/images/family/common-cu124'}
-
+#
+# Finally, you can also use the common boot image (which has no consideration for GPU) and installs cuda drivers on startup
+# (which is taken care of by this module). (The 'deeplearning' images above also need to run installation, only simpler,
+# because the script is already on the disk.) The following worked in tests:
+#
+#  machine_type: 'n1-standard-8'
+#  gpu: {'gpu_count': 2, 'gpu_type': 'nvidia-tesla-t4'}
+#  boot_disk: {'size_gb': 100}
 
 # Taken from
 #   https://github.com/GoogleCloudPlatform/compute-gpu-installation
-# not working yet
+#
+# This script will reboot the machine 2 or 3 times, so it may take
+# a few minutes for the machine to be ready. Being able to `ssh` into
+# the machine does not guarantee this script has all finished.
+# Instead, type `nvidia-smi`. If it works, this script has finished.
 cuda_installer = """
-#!/bin/bash
 if test -f /opt/google/cuda-installer
 then
   exit
@@ -116,10 +126,11 @@ class InstanceConfig:
             self,
             *,
             size_gb: int = 50,
-            source_image: str = 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64',
+            source_image: str = 'projects/debian-cloud/global/images/family/debian-11',
         ):
             # See a list of OS images: https://cloud.google.com/compute/docs/images/os-details
-            # Another good image might be 'projects/debian-cloud/global/images/family/debian-11'.
+            # Another good image might be 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64',
+
             if size_gb:
                 assert size_gb >= 30, f'{size_gb} >= 30'
             self.size_gb = size_gb  # GCP default is 30, but a GPU machine would require at least 40
@@ -128,7 +139,6 @@ class InstanceConfig:
                 source_image = f'projects/{proj}/global/images/family/{fam}'
             self.source_image = source_image
 
-        @property
         def disk(self) -> compute_v1.AttachedDisk:
             return compute_v1.AttachedDisk(
                 boot=True,
@@ -172,34 +182,34 @@ class InstanceConfig:
                         f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
                     )
             self.size_gb = size_gb
-            self.zone = None  # assigned separately after initialization
             self.mount_path = mount_path
             self.mode = mode
 
-        @property
-        def disk(self) -> compute_v1.AttachedDisk:
+        def disk(self, zone: str) -> compute_v1.AttachedDisk:
             return compute_v1.AttachedDisk(
                 type_=compute_v1.AttachedDisk.Type.SCRATCH.name,
                 interface='NVME',
                 disk_size_gb=self.size_gb,
                 initialize_params=compute_v1.AttachedDiskInitializeParams(
-                    disk_type=f'zones/{self.zone}/diskTypes/local-ssd',
+                    disk_type=f'zones/{zone}/diskTypes/local-ssd',
                 ),
                 auto_delete=True,
             )
 
         @property
-        def mount_script(self) -> str:
+        def startup_script(self) -> str:
             # See https://cloud.google.com/compute/docs/disks/add-local-ssd#formatandmount
             # We support a single local SSD disk. It's name is always 'google-local-nvme-ssd-0'.
             mode = self.mode
             if mode == 'ro':
                 mode = 'r'
             return '\n'.join(
-                'sudo mkfs.ext4 -F /dev/disk/by-id/google-local-nvme-ssd-0',
-                f'sudo mkdir -p {self.mount_path}',
-                f'sudo mount /dev/disk/by-id/google-local-nvme-ssd-0 {self.mount_path}',
-                f'sudo chmod a+{mode} {self.mount_path}' '',
+                (
+                    'sudo mkfs.ext4 -F /dev/disk/by-id/google-local-nvme-ssd-0',
+                    f'sudo mkdir -p {self.mount_path}',
+                    f'sudo mount /dev/disk/by-id/google-local-nvme-ssd-0 {self.mount_path}',
+                    f'sudo chmod a+{mode} {self.mount_path}' '',
+                )
             )
 
     class GPU:
@@ -212,13 +222,11 @@ class InstanceConfig:
             assert gpu_count
             self.gpu_type = gpu_type
             self.gpu_count = gpu_count
-            self.zone = None  # to be assigned separately
 
-        @property
-        def accelerator(self) -> compute_v1.AcceleratorConfig:
+        def accelerator(self, zone: str) -> compute_v1.AcceleratorConfig:
             return compute_v1.AcceleratorConfig(
                 accelerator_count=self.gpu_count,
-                accelerator_type=f'projects/{get_project_id()}/zones/{self.zone}/acceleratorTypes/{self.gpu_type}',
+                accelerator_type=f'projects/{get_project_id()}/zones/{zone}/acceleratorTypes/{self.gpu_type}',
             )
 
     def __init__(
@@ -239,7 +247,9 @@ class InstanceConfig:
         `network_uri` may look like "projects/shared-vpc-admin/global/networks/vpcnet-shared-prod-01".
         `subnet_uri` may look like "https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01".
 
-        `startup_script`: shell script that runs to make preparations before the instance is operational.
+        `startup_script`: shell script that installs software and makes any other preps before the instance becomes operational.
+        If provided, this must handle everything, as the script will not be augmented in this function.
+        Common concerns include mounting local disks and installing cuda drivers (if you attach GPUs).
 
         There are some restrictions to the label values.
         See https://cloud.google.com/batch/docs/organize-resources-using-labels
@@ -252,18 +262,14 @@ class InstanceConfig:
             for k, v in labels.items()
         }
 
-        startup_scripts = []
         disks = []
 
         boot_disk = self.BootDisk(**(boot_disk or {}))
-        startup_scripts.append(boot_disk.startup_script)
-        disks.append(boot_disk.disk)
+        disks.append(boot_disk.disk())
 
         if local_ssd:
-            ssd = self.LocalSSD(**local_ssd)
-            ssd.zone = zone
-            disks.append(ssd.disk)
-            startup_scripts.append(ssd.mount_script)
+            local_ssd = self.LocalSSD(**local_ssd)
+            disks.append(local_ssd.disk(zone))
 
         guest_accelerators = None
         scheduling = None
@@ -274,12 +280,15 @@ class InstanceConfig:
                     f'machine_type {machine_type} comes with GPUs; you should not specify `gpu` again'
                 )
             scheduling = compute_v1.Scheduling(on_host_maintenance='TERMINATE')
+            gpu = True
         elif gpu:
             gpu = self.GPU(**gpu)
-            gpu.zone = zone
-            guest_accelerators = [gpu.accelerator]
+            guest_accelerators = [gpu.accelerator(zone)]
             scheduling = compute_v1.Scheduling(on_host_maintenance='TERMINATE')
             # See https://cloud.google.com/compute/docs/instances/setting-vm-host-options
+            gpu = True
+        else:
+            gpu = False
 
         network = compute_v1.NetworkInterface(
             network=network_uri, subnetwork=subnet_uri
@@ -287,8 +296,22 @@ class InstanceConfig:
 
         metadata = None
         if not startup_script:
-            if startup_scripts:
-                startup_script = '\n'.join(['#!/bin/bash'] + startup_scripts)
+            scripts = []
+            if local_ssd:
+                scripts.append(local_ssd.startup_script)
+            if boot_disk.startup_script:
+                scripts.append(boot_disk.startup_script)
+            else:
+                if gpu:
+                    boot_disk.append(cuda_installer)
+                    # If boot_disk has script, it is installing cuda driver
+                    # (as that is the only scenario where BootDisk has script),
+                    # hence `cuda_installer` is not used.
+
+                    # NOTE: `cuda_installer` must be the last component of the startup script,
+                    # because `cuda_install` will reboot the machine and continue afterwards.
+            if scripts:
+                startup_script = '\n'.join(['#!/bin/bash'] + scripts)
         if startup_script:
             metadata = compute_v1.Metadata(
                 items=[compute_v1.Items(key='startup-script', value=startup_script)]
@@ -314,6 +337,7 @@ class InstanceConfig:
         )
         self.name = name
         self.zone = zone
+        self.startup_script = startup_script
 
     @property
     def instance(self) -> compute_v1.Instance:
