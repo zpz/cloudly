@@ -91,7 +91,7 @@ def basic_resource_labels():
 #   gpu: {'gpu_count': 2, 'gpu_type': 'nvidia-tesla-t4'}
 #   boot_disk: {'size_gb': 100, 'source_image': 'projects/deeplearning-platform-release/global/images/family/common-cu124'}
 #
-# Finally, you can also use the common boot image (which has no consideration for GPU) and installs cuda drivers on startup
+# Finally, you can also use the common boot image (which has no consideration for GPU) and install cuda drivers on startup
 # (which is taken care of by this module). (The 'deeplearning' images above also need to run installation, only simpler,
 # because the script is already on the disk.) The following worked in tests:
 #
@@ -303,13 +303,13 @@ class InstanceConfig:
                 scripts.append(boot_disk.startup_script)
             else:
                 if gpu:
-                    boot_disk.append(cuda_installer)
+                    scripts.append(cuda_installer)
                     # If boot_disk has script, it is installing cuda driver
                     # (as that is the only scenario where BootDisk has script),
                     # hence `cuda_installer` is not used.
 
                     # NOTE: `cuda_installer` must be the last component of the startup script,
-                    # because `cuda_install` will reboot the machine and continue afterwards.
+                    # because `cuda_installer` will reboot the machine and continue afterwards.
             if scripts:
                 startup_script = '\n'.join(['#!/bin/bash'] + scripts)
         if startup_script:

@@ -25,8 +25,6 @@ from .compute import basic_resource_labels, validate_label_key, validate_label_v
 #
 #    allocation_policy
 #        machine_type: 'n1-standard-16'
-#        boot_disk: {'size_gb': 50, 'image': 'batch-debian'}
-#        install_gpu_drivers: True
 #    gpu: {'gpu_type': 'nvidia-tesla-4', 'gpu_count': 1}
 #    task_group:
 #        task_spec:
@@ -36,14 +34,11 @@ from .compute import basic_resource_labels, validate_label_key, validate_label_v
 #                options: '--rm --init'
 #
 # Test reported success, so at least the command `nvidia-smi` was present in the container.
-# `install_gpu_drivers=True` was necessary in the test.
 #
 # Another scenario that seemed to work:
 #
 #    allocation_policy
 #        machine_type: 'g2-standard-16'
-#        boot_disk: {'size_gb': 50, 'image': 'batch-debian'}
-#        install_gpu_drivers: True
 #    task_group:
 #        task_spec:
 #            container:
@@ -51,9 +46,12 @@ from .compute import basic_resource_labels, validate_label_key, validate_label_v
 #                commands: 'nvidia-smi'
 #                options: '--rm --init'
 #
-# The g2 machine comes with GPUs. `install_gpu_drivers=True` was necessary.
+# The g2 machine comes with GPUs.
 # Note the absence of `gpu: {...}` setting.
 # Also note that `--runtime=nvidia` was not accepted, whereas `--gpus=all` was not necessary.
+#
+# Some accommodations for GPU have been made by this module if you do not specify them explicitly.
+# The accommodations concern `install_gpu_drivers` and `boot_disk`.
 
 
 class TaskConfig:
@@ -295,8 +293,8 @@ class JobConfig:
         provisioning_model: Literal['standard', 'spot', 'preemptible'] = 'standard',
         boot_disk: dict | None = None,
         gpu: GPU | None = None,
-        install_gpu_drivers: bool | None = None,
         local_ssd_disk: LocalSSD | None = None,
+        install_gpu_drivers: bool | None = None,
         **kwargs,
     ) -> batch_v1.AllocationPolicy:
         """
@@ -317,6 +315,17 @@ class JobConfig:
         provisioning_model = getattr(
             batch_v1.AllocationPolicy.ProvisioningModel, provisioning_model.upper()
         )
+
+        if gpu or machine_type.split('-')[0] in ('a2', 'a3', 'g2'):
+            if boot_disk:
+                if boot_disk.get('image', None) is None:
+                    boot_disk['image'] = 'batch-debian'
+                if boot_disk.get('size_gb', None) is None:
+                    boot_disk['size_gb'] = 50
+            else:
+                boot_disk = {'size_gb': 50, 'image': 'batch-debian'}
+            if install_gpu_drivers is None:
+                install_gpu_drivers = True
 
         if boot_disk:
             boot_disk = cls.BootDisk(**boot_disk)
