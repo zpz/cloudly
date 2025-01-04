@@ -8,14 +8,18 @@ from __future__ import annotations
 
 __all__ = ['Job', 'JobConfig']
 
-import warnings
 from typing import Literal
 
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
 
 from .auth import get_credentials, get_project_id, get_service_account_email
-from .compute import basic_resource_labels, validate_label_key, validate_label_value, validate_local_ssd_size_gb
+from .compute import (
+    basic_resource_labels,
+    validate_label_key,
+    validate_label_value,
+    validate_local_ssd_size_gb,
+)
 
 # Using GPUs
 #
