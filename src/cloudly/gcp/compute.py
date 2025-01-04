@@ -47,6 +47,28 @@ def validate_label_value(val: str, *, fix: bool = False) -> str:
     return val
 
 
+def validate_local_ssd_size_gb(size_gb: int) -> int:
+    # Use the returned value.
+    a, b = divmod(size_gb, 375)
+    if 0 < b < 300:
+        # Fail rather than round up a great deal, for visibility.
+        raise ValueError(
+            f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
+        )
+    elif b:
+        # Round up with a warning.
+        warnings.warn(
+            f'`size_gb` for LocalSSD is rounded up from {size_gb} to {375 * (a + 1)}'
+        )
+        size_gb = 375 * (a + 1)
+    else:  # b == 0
+        if a == 0:
+            raise ValueError(
+                f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
+            )
+    return size_gb
+
+
 def basic_resource_labels():
     caller = get_calling_file()
     return {
@@ -161,27 +183,8 @@ class InstanceConfig:
             """
             `size_gb` should be a multiple of 375. If not,
             the next greater multiple of 375 will be used.
-
-
             """
-            a, b = divmod(size_gb, 375)
-            if 0 < b < 300:
-                # Fail rather than round up a great deal, for visibility.
-                raise ValueError(
-                    f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
-                )
-            elif b:
-                # Round up with a warning.
-                warnings.warn(
-                    f'`size_gb` for LocalSSD is rounded up from {size_gb} to {375 * (a + 1)}'
-                )
-                size_gb = 375 * (a + 1)
-            else:  # b == 0
-                if a == 0:
-                    raise ValueError(
-                        f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
-                    )
-            self.size_gb = size_gb
+            self.size_gb = validate_local_ssd_size_gb(size_gb)
             self.mount_path = mount_path
             self.mode = mode
 

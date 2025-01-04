@@ -15,7 +15,7 @@ from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
 
 from .auth import get_credentials, get_project_id, get_service_account_email
-from .compute import basic_resource_labels, validate_label_key, validate_label_value
+from .compute import basic_resource_labels, validate_label_key, validate_label_value, validate_local_ssd_size_gb
 
 # Using GPUs
 #
@@ -51,7 +51,8 @@ from .compute import basic_resource_labels, validate_label_key, validate_label_v
 # Also note that `--runtime=nvidia` was not accepted, whereas `--gpus=all` was not necessary.
 #
 # Some accommodations for GPU have been made by this module if you do not specify them explicitly.
-# The accommodations concern `install_gpu_drivers` and `boot_disk`.
+# The accommodations mainly concern `install_gpu_drivers` and `boot_disk`.
+# See `JobConfig.allocation_policy` for details.
 
 
 class TaskConfig:
@@ -189,25 +190,7 @@ class JobConfig:
             `size_gb` should be a multiple of 375. If not,
             the next greater multiple of 375 will be used.
             """
-            a, b = divmod(size_gb, 375)
-            if 0 < b < 300:
-                # Fail rather than round up a great deal, for visibility.
-                raise ValueError(
-                    f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
-                )
-            elif b:
-                # Round up with a warning.
-                warnings.warn(
-                    f'`size_gb` for LocalSSD is rounded up from {size_gb} to {375 * (a + 1)}'
-                )
-                size_gb = 375 * (a + 1)
-            else:  # b == 0
-                if a == 0:
-                    raise ValueError(
-                        f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
-                    )
-
-            self.size_gb = size_gb
+            self.size_gb = validate_local_ssd_size_gb(size_gb)
             self.device_name = device_name
             self.mount_path = mount_path
             self.mode = mode
