@@ -77,7 +77,7 @@ class TaskConfig:
                 The commands to be run within the Docker container, such as 'python -m mypackage.mymodule --arg1 x --arg2 y'.
                 This is a single string that is run as a shell script. Inside the container, the command that is executed is
 
-                    /bin/sh -c "<commands>"
+                    /bin/bash -c "<commands>"
 
                 This is the command you would type verbatim in the console inside the container.
             options
