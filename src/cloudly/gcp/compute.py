@@ -47,6 +47,28 @@ def validate_label_value(val: str, *, fix: bool = False) -> str:
     return val
 
 
+def validate_local_ssd_size_gb(size_gb: int) -> int:
+    # Use the returned value.
+    a, b = divmod(size_gb, 375)
+    if 0 < b < 300:
+        # Fail rather than round up a great deal, for visibility.
+        raise ValueError(
+            f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
+        )
+    elif b:
+        # Round up with a warning.
+        warnings.warn(
+            f'`size_gb` for LocalSSD is rounded up from {size_gb} to {375 * (a + 1)}'
+        )
+        size_gb = 375 * (a + 1)
+    else:  # b == 0
+        if a == 0:
+            raise ValueError(
+                f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
+            )
+    return size_gb
+
+
 def basic_resource_labels():
     caller = get_calling_file()
     return {
@@ -91,7 +113,7 @@ def basic_resource_labels():
 #   gpu: {'gpu_count': 2, 'gpu_type': 'nvidia-tesla-t4'}
 #   boot_disk: {'size_gb': 100, 'source_image': 'projects/deeplearning-platform-release/global/images/family/common-cu124'}
 #
-# Finally, you can also use the common boot image (which has no consideration for GPU) and installs cuda drivers on startup
+# Finally, you can also use the common boot image (which has no consideration for GPU) and install cuda drivers on startup
 # (which is taken care of by this module). (The 'deeplearning' images above also need to run installation, only simpler,
 # because the script is already on the disk.) The following worked in tests:
 #
@@ -161,27 +183,8 @@ class InstanceConfig:
             """
             `size_gb` should be a multiple of 375. If not,
             the next greater multiple of 375 will be used.
-
-
             """
-            a, b = divmod(size_gb, 375)
-            if 0 < b < 300:
-                # Fail rather than round up a great deal, for visibility.
-                raise ValueError(
-                    f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
-                )
-            elif b:
-                # Round up with a warning.
-                warnings.warn(
-                    f'`size_gb` for LocalSSD is rounded up from {size_gb} to {375 * (a + 1)}'
-                )
-                size_gb = 375 * (a + 1)
-            else:  # b == 0
-                if a == 0:
-                    raise ValueError(
-                        f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
-                    )
-            self.size_gb = size_gb
+            self.size_gb = validate_local_ssd_size_gb(size_gb)
             self.mount_path = mount_path
             self.mode = mode
 
@@ -303,13 +306,13 @@ class InstanceConfig:
                 scripts.append(boot_disk.startup_script)
             else:
                 if gpu:
-                    boot_disk.append(cuda_installer)
+                    scripts.append(cuda_installer)
                     # If boot_disk has script, it is installing cuda driver
                     # (as that is the only scenario where BootDisk has script),
                     # hence `cuda_installer` is not used.
 
                     # NOTE: `cuda_installer` must be the last component of the startup script,
-                    # because `cuda_install` will reboot the machine and continue afterwards.
+                    # because `cuda_installer` will reboot the machine and continue afterwards.
             if scripts:
                 startup_script = '\n'.join(['#!/bin/bash'] + scripts)
         if startup_script:
