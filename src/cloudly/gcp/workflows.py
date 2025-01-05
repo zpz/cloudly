@@ -145,7 +145,8 @@ class BatchStep(Step):
                         'jobId': job_id,
                         'body': job_config,
                     },
-                    'result': result_name,  # This "result" seems to be the entire batch-job config
+                    'result': result_name,  
+                    # This "result" seems to be the entire batch-job config, and not the "result" of the job's run.
                 }
             }
         )  # This uses Workflow's batch "connector" to create and run the batch job, waiting for its completion.
