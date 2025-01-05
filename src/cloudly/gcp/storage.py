@@ -40,7 +40,6 @@ from cloudly.upathlib import (
 from cloudly.upathlib._blob import _resolve_local_path
 from cloudly.upathlib._util import MAX_THREADS, get_shared_thread_pool
 
-
 # End user may want to do this:
 #  logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
 # to suppress the "urllib3 connection lost" warning.
