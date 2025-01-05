@@ -145,7 +145,7 @@ class BatchStep(Step):
                         'jobId': job_id,
                         'body': job_config,
                     },
-                    'result': result_name,  
+                    'result': result_name,
                     # This "result" seems to be the entire batch-job config, and not the "result" of the job's run.
                 }
             }
