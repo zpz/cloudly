@@ -148,8 +148,6 @@ class TaskConfig:
 
 class JobConfig:
     class BootDisk:
-        # See
-        #   https://cloud.google.com/batch/docs/vm-os-environment-overview
         def __init__(
             self,
             *,
@@ -162,6 +160,7 @@ class JobConfig:
             """
             `image`: 'batch-debian' seems to be a good value for GPUs; otherwise `batch-cos` may
                 also work well. Leave it at `None` until needed.
+                See https://cloud.google.com/batch/docs/vm-os-environment-overview
             """
             assert size_gb >= 30
             self.size_gb = size_gb
