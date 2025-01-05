@@ -132,9 +132,7 @@ class BatchStep(Step):
             {
                 'log_create': {
                     'call': 'sys.log',
-                    'args': {
-                        'data': f'creating and running the batch job {job_id}'
-                    },
+                    'args': {'data': f'creating and running the batch job {job_id}'},
                 }
             }
         )
