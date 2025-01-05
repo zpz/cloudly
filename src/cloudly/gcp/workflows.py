@@ -133,7 +133,7 @@ class BatchStep(Step):
                 'log_create': {
                     'call': 'sys.log',
                     'args': {
-                        'data': f'${{"creating and running the batch job " + {job_id}}}'
+                        'data': f'creating and running the batch job {job_id}'
                     },
                 }
             }
@@ -156,7 +156,7 @@ class BatchStep(Step):
                 'log_create_result': {
                     'call': 'sys.log',
                     'args': {
-                        'data': f'${{"result of batch job " + {job_id} + ": " + {result_name}}}'
+                        'data': f'${{"result of batch job {job_id}: \n" + str({result_name})}}'
                     },
                 }
             }
@@ -167,7 +167,7 @@ class BatchStep(Step):
                 {
                     'log_delete': {
                         'call': 'sys.log',
-                        'args': {'data': f'${{"deleting the batch job " + {job_id}}}'},
+                        'args': {'data': f'deleting the batch job {job_id}'},
                     }
                 }
             )

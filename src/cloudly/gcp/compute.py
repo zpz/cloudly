@@ -216,7 +216,7 @@ class InstanceConfig:
             )
 
     class GPU:
-        def __init__(self, *, gpu_type: str, gpu_count: int):
+        def __init__(self, *, gpu_type: str, gpu_count: int = 1):
             """
             Use `gcloud compute accelerator-types list` to see valid values of `gpu_type`.
             Some examples: 'nvidia-tesla-t4', 'nvidia-l4', 'nvidia-tesla-a100', 'nvidia-tesla-v100'
