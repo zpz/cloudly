@@ -2,7 +2,5 @@
 
 export TINY=zppz/tiny:22.12.11
 export PARENT="$(bash -c "$(docker run --rm ${TINY} cat /tools/find-image)" -- zppz/py3)"
-# export MINI="$(bash -c "$(docker run --rm ${TINY} cat /tools/find-image)" -- zppz/mini)"
-# bash -c "$(docker run --rm ${MINI} cat /tools/pip-based/run)" -- "$@"
 
 bash <(curl -s https://raw.githubusercontent.com/zpz/docker-mini/master/tools/pip-based/run) $@
