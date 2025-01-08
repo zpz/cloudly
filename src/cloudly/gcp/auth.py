@@ -22,6 +22,7 @@ import google.auth
 import google.auth.credentials
 from google.api_core.exceptions import RetryError
 from google.api_core.retry import Retry, if_exception_type
+from google.auth.transport.requests import Request
 
 _PROJECT_ID = None
 _CREDENTIALS = None
@@ -132,7 +133,7 @@ def get_credentials(
                 initial=1.0,
                 maximum=10.0,
                 timeout=300.0,
-            )(credentials.refresh)(google.auth.transport.requests.Request())
+            )(credentials.refresh)(Request())
             # One check shows that this token expires in one hour.
         except RetryError as e:
             raise e.cause
