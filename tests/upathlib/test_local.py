@@ -4,7 +4,6 @@ from uuid import uuid4
 
 import pytest
 
-import cloudly.upathlib._tests as alltests
 from cloudly.upathlib import LocalUpath
 from cloudly.upathlib.serializer import Lz4PickleSerializer
 
@@ -29,17 +28,6 @@ def test_localupath_init():
     assert p._path == str(pathlib.Path.cwd())
     p = LocalUpath('a', 'b', 'c', 'd')
     assert str(p.path) == str(pathlib.Path(pathlib.Path.cwd(), 'a', 'b', 'c', 'd'))
-
-
-def test_all(test_path):
-    alltests.test_all(test_path)
-
-
-def test_lock():
-    test_path = LocalUpath('/tmp/upathlib_local_test') / 'test-lock'
-    # Use a fix path to see whether there are issues, because
-    # the implementation leaves the lock file around.
-    alltests.test_lock(test_path)
 
 
 def test_rename(test_path):

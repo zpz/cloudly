@@ -88,6 +88,8 @@ class TaskConfig:
                 environment variables that you want to be passed into the container are also handled by `options`.
 
                 Usually `options` should contain '--rm --init --log-driver=gcplogs', among others.
+            local_ssd_disk
+                This is provided by `TaskConfig.__init__`; user should not provide this directly.
             """
 
             if local_ssd_disk is not None:
@@ -121,6 +123,12 @@ class TaskConfig:
         local_ssd_disk: JobConfig.LocalSSD | None = None,
         **kwargs,
     ):
+        """
+        Parameters
+        ----------
+        local_ssd_disk
+            This is provided by `JobConfig.__init__`. User should not provide this directly.
+        """
         container = self.Container(**container, local_ssd_disk=local_ssd_disk)
         runnable = batch_v1.Runnable(
             container=container.container,
@@ -292,6 +300,8 @@ class JobConfig:
             Could be like this: 'projects/shared-vpc-admin/global/networks/vpcnet-shared-prod-01'.
         subnet_uri
             Could be like this: 'https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01'
+        labels, gpu, local_ssd_disk
+            These are provided by `JobConfig.__init__`. User should not provide them directly.
         """
         network = batch_v1.AllocationPolicy.NetworkInterface(
             network=network_uri,

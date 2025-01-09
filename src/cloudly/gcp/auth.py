@@ -6,7 +6,8 @@ Code that runs on a GCP machine may be able to infer ``credentials`` and ``proje
 via `google.auth.default() <https://googleapis.dev/python/google-auth/latest/user-guide.html#application-default-credentials>`_.
 
 If the code is running on a non-GCP machine but needs to interact with GCP,
-you can call :func:`set_env` to provide env vars that are expected by the GCP mechanism.
+you can set up environment variables to "impersonate" a GCP machine.
+The function :func:`set_env` is one way to set this up.
 
 See: https://google.aip.dev/auth/4110
      https://stackoverflow.com/questions/44328277/how-to-auth-to-google-cloud-using-service-account-in-python
@@ -38,21 +39,21 @@ def set_env(
     path: str | None = None,
 ) -> None:
     """
-    This function sets up env var(s) on a non-GCP machine so that GCP's default mechanism can find account
-    credentials as if the code is running on a GCP machine.
-
-    I'm not sure all the content of ``info`` is required.
+    This function writes credentials info into a "credential file" and sets the environment variable
+    `GOOGLE_APPLICATION_CREDENTIALS` to point to that file. GCP client libraries use that env var
+    to find so-called "Application Default Credentials (ADC)". This setup is needed for GCP client code
+    to run (i.e. to communicate with GCP services) on a non-GCP machine. If the code is running on a GCP machine
+    (already in your account), this environment is already set up for you.
 
     This function needs to be called only once in the program.
     Env vars set by `os.environ` carries over into other processes created using the ``multiprocessing`` module.
 
-    Alternatively, if you have the dict ``info``,  the account ``credentials`` can be obtained by the following
-    function call
+    However, this is not the only way to set up credentials. Depending on the type of your account,
+    different fields may be needed. For example, I have a personal account of the type "authorized_user". For that type,
+    "project_id" is not available in the credential file. (Even if `project_id` is included in that file, it will be ignored.)
+    I need to use a second env var `GOOGLE_CLOUD_PROJECT` to provide project ID.
 
-    ::
-
-        google.oauth2.service_account.Credentials.from_service_account_info(
-            info, scopes=['https://www.googleapis.com/auth/cloud-platform'])
+    If appropriate env vars are already set up (as is the case on a GCP machine), there is no need to call this function.
     """
     private_key = (
         '-----BEGIN PRIVATE KEY-----\n'
