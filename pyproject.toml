@@ -44,15 +44,19 @@ azure = [
 gcp = [
     "google-auth",
     "google-api-core",
-    "google-api-python-client >=2.13.9,<3.0",
+    "google-api-python-client",
     "google-cloud-batch",
     "google-cloud-compute",
     "google-cloud-logging",
     "google-cloud-scheduler",
     "google-cloud-secret-manager",
-    "google-cloud-storage >=2.0,<3.0",
+    "google-cloud-storage",
     "google-cloud-workflows",
     "requests",
+]
+vertexai = [
+    "google-cloud-aiplatform",
+    "google-cloud-resource-manager",
 ]
 test = [
     "pytest-asyncio",
