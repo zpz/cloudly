@@ -8,14 +8,55 @@ from __future__ import annotations
 
 __all__ = ['Job', 'JobConfig']
 
-import warnings
 from typing import Literal
 
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
 
 from .auth import get_credentials, get_project_id, get_service_account_email
-from .compute import basic_resource_labels, validate_label_key, validate_label_value
+from .compute import (
+    basic_resource_labels,
+    validate_label_key,
+    validate_label_value,
+    validate_local_ssd_size_gb,
+)
+
+# Using GPUs
+#
+# See https://www.googlecloudcommunity.com/gc/Infrastructure-Compute-Storage/GCP-Batch-use-NVDIA-GPU-to-train-models-what-installation-are/m-p/784063
+#
+# One scenario that seemed to work:
+#
+#    allocation_policy
+#        machine_type: 'n1-standard-16'
+#    gpu: {'gpu_type': 'nvidia-tesla-4', 'gpu_count': 1}
+#    task_group:
+#        task_spec:
+#            container:
+#                image_uri: <ubuntu 20.04 image>
+#                commands: 'nvidia-smi'
+#                options: '--rm --init'
+#
+# Test reported success, so at least the command `nvidia-smi` was present in the container.
+#
+# Another scenario that seemed to work:
+#
+#    allocation_policy
+#        machine_type: 'g2-standard-16'
+#    task_group:
+#        task_spec:
+#            container:
+#                image_uri: <ubuntu 20.04 image>
+#                commands: 'nvidia-smi'
+#                options: '--rm --init'
+#
+# The g2 machine comes with GPUs.
+# Note the absence of `gpu: {...}` setting.
+# Also note that `--runtime=nvidia` was not accepted, whereas `--gpus=all` was not necessary.
+#
+# Some accommodations for GPU have been made by this module if you do not specify them explicitly.
+# The accommodations mainly concern `install_gpu_drivers` and `boot_disk`.
+# See `JobConfig.allocation_policy` for details.
 
 
 class TaskConfig:
@@ -27,8 +68,7 @@ class TaskConfig:
             commands: str,
             options: str | None = None,
             local_ssd_disk: JobConfig.LocalSSD | None = None,
-            disk_mount_path: str = None,
-            gpu: JobConfig.GPU | None = None,
+            local_ssd_mount_path: str = None,
             **kwargs,
         ):
             """
@@ -38,45 +78,30 @@ class TaskConfig:
                 The full tag of the image.
             commands
                 The commands to be run within the Docker container, such as 'python -m mypackage.mymodule --arg1 x --arg2 y'.
+                This is a single string that is run as a shell script. Inside the container, the command that is executed is
 
-                This is the command you would run if you are within the container.
+                    /bin/bash -c "<commands>"
+
+                This is the command you would type verbatim in the console inside the container.
             options
                 The option string to be applied to `docker run`, such as '-e NAME=abc --network host'. As this example shows,
                 environment variables that you want to be passed into the container are also handled by `options`.
+
+                Usually `options` should contain '--rm --init --log-driver=gcplogs', among others.
+            local_ssd_disk
+                This is provided by `TaskConfig.__init__`; user should not provide this directly.
             """
-            if not commands.startswith('-c '):
-                commands = '-c ' + commands
-
-            if options:
-                options = ' ' + options.strip() + ' '  # to help search in it
-            else:
-                options = ''
-            if ' --rm ' not in options:
-                options += ' --rm '
-            if ' --init ' not in options:
-                options += '--init '
-
-            if gpu:
-                if ' --runtime=nvidia ' not in options:
-                    options = options + '--runtime=nvidia '
-
-            if ' --log-driver ' not in options and ' --log-driver=' not in options:
-                options += '--log-driver=gcplogs '
-            # TODO: is this necessary? is this enough by itself?
 
             if local_ssd_disk is not None:
                 volumes = [
-                    f'{local_ssd_disk.mount_path}:{disk_mount_path or local_ssd_disk.mount_path}:{local_ssd_disk.access_mode}'
+                    f'{local_ssd_disk.mount_path}:{local_ssd_mount_path or local_ssd_disk.mount_path}:{local_ssd_disk.mode}'
                 ]
             else:
                 volumes = None
 
-            options = options.strip()
-            if not options:
-                options = None
             self._container = batch_v1.Runnable.Container(
                 image_uri=image_uri,
-                commands=[commands],
+                commands=['-c', commands],
                 options=options,
                 entrypoint='/bin/bash',
                 volumes=volumes,
@@ -92,16 +117,18 @@ class TaskConfig:
         *,
         container: dict,
         max_run_duration_seconds: int | None = None,
-        max_retry_count: int | None = None,
-        ignore_exit_status: bool | None = None,
-        always_run: bool | None = None,
+        max_retry_count: int = 0,
+        ignore_exit_status: bool = False,
+        always_run: bool = False,
         local_ssd_disk: JobConfig.LocalSSD | None = None,
         **kwargs,
     ):
-        if ignore_exit_status is None:
-            ignore_exit_status = False
-        if always_run is None:
-            always_run = False
+        """
+        Parameters
+        ----------
+        local_ssd_disk
+            This is provided by `JobConfig.__init__`. User should not provide this directly.
+        """
         container = self.Container(**container, local_ssd_disk=local_ssd_disk)
         runnable = batch_v1.Runnable(
             container=container.container,
@@ -117,7 +144,7 @@ class TaskConfig:
         self._task_spec = batch_v1.TaskSpec(
             runnables=[runnable],
             max_run_duration=max_run_duration,
-            max_retry_count=max_retry_count or 0,
+            max_retry_count=max_retry_count,
             volumes=None if local_ssd_disk is None else [local_ssd_disk.volume],
             **kwargs,
         )
@@ -129,20 +156,24 @@ class TaskConfig:
 
 class JobConfig:
     class BootDisk:
-        # See
-        #   https://cloud.google.com/batch/docs/vm-os-environment-overview
         def __init__(
             self,
             *,
             size_gb: int,
-            disk_type: Literal['pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard']
-            | None = None,
+            disk_type: Literal[
+                'pd-balanced', 'pd-extreme', 'pd-ssd', 'pd-standard'
+            ] = 'pd-balanced',
             image: str | None = None,
         ):
+            """
+            `image`: 'batch-debian' seems to be a good value for GPUs; otherwise `batch-cos` may
+                also work well. Leave it at `None` until needed.
+                See https://cloud.google.com/batch/docs/vm-os-environment-overview
+            """
             assert size_gb >= 30
             self.size_gb = size_gb
-            self.type_ = disk_type or 'pd-balanced'
-            self.image = image or 'batch-cos'
+            self.type_ = disk_type
+            self.image = image
 
         @property
         def disk(self) -> batch_v1.AllocationPolicy.Disk:
@@ -162,36 +193,18 @@ class JobConfig:
             self,
             *,
             size_gb: int,
-            device_name: str | None = None,
-            mount_path: str | None = None,
-            access_mode: Literal['ro', 'rw'] | None = None,
+            device_name: str = 'local-ssd',
+            mount_path: str = '/mnt',
+            mode: Literal['ro', 'rw'] = 'rw',
         ):
             """
             `size_gb` should be a multiple of 375. If not,
             the next greater multiple of 375 will be used.
             """
-            a, b = divmod(size_gb, 375)
-            if 0 < b < 300:
-                # Fail rather than round up a great deal, for visibility.
-                raise ValueError(
-                    f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
-                )
-            elif b:
-                # Round up with a warning.
-                warnings.warn(
-                    f'`size_gb` for LocalSSD is rounded up from {size_gb} to {375 * (a + 1)}'
-                )
-                size_gb = 375 * (a + 1)
-            else:  # b == 0
-                if a == 0:
-                    raise ValueError(
-                        f'`size_gb` for LocalSSD should be a multiple of 375; got {size_gb}'
-                    )
-
-            self.size_gb = size_gb
-            self.device_name = device_name or 'local-ssd'
-            self.mount_path = mount_path or '/mnt'
-            self.access_mode = access_mode or 'rw'
+            self.size_gb = validate_local_ssd_size_gb(size_gb)
+            self.device_name = device_name
+            self.mount_path = mount_path
+            self.mode = mode
 
         @property
         def disk(self) -> batch_v1.AllocationPolicy.AttachedDisk:
@@ -204,8 +217,8 @@ class JobConfig:
 
         @property
         def volume(self) -> batch_v1.Volume:
-            opts = ['async', self.access_mode]
-            if self.access_mode == 'ro':
+            opts = ['async', self.mode]
+            if self.mode == 'ro':
                 opts.append('noload')
             return batch_v1.Volume(
                 device_name=self.device_name,
@@ -216,7 +229,8 @@ class JobConfig:
     class GPU:
         def __init__(self, *, gpu_type: str, gpu_count: int):
             """
-            `gpu_type`: values like 'nvidia-tesla-t4', 'nvidia-tesla-v100', etc.
+            Use `gcloud compute accelerator-types list` to see valid values of `gpu_type`.
+            Some examples: 'nvidia-tesla-t4', 'nvidia-l4', 'nvidia-tesla-a100', 'nvidia-tesla-v100'
             """
             assert gpu_type
             assert gpu_count
@@ -234,10 +248,10 @@ class JobConfig:
         cls,
         *,
         task_spec: dict,
-        task_count: int | None = None,
-        task_count_per_node: int | None = None,
+        task_count: int = 1,
+        task_count_per_node: int = 1,
         parallelism: int | None = None,
-        permissive_ssh: bool | None = None,
+        permissive_ssh: bool = True,
         **kwargs,
     ) -> batch_v1.TaskGroup:
         """
@@ -250,14 +264,12 @@ class JobConfig:
         parallelism
             Number of tasks that can be running across all nodes at any time.
         """
-        if permissive_ssh is None:
-            permissive_ssh = True
         task_spec = TaskConfig(**task_spec).task_spec
         return batch_v1.TaskGroup(
             task_spec=task_spec,
-            task_count=task_count or 1,
+            task_count=task_count,
             parallelism=parallelism,
-            task_count_per_node=task_count_per_node or 1,
+            task_count_per_node=task_count_per_node,
             permissive_ssh=permissive_ssh,
             **kwargs,
         )
@@ -271,11 +283,12 @@ class JobConfig:
         network_uri: str,
         subnet_uri: str,
         machine_type: str,
-        no_external_ip_address: bool | None = None,
-        provisioning_model: Literal['standard', 'spot', 'preemptible'] | None = None,
-        boot_disk: BootDisk | None = None,
+        no_external_ip_address: bool = True,
+        provisioning_model: Literal['standard', 'spot', 'preemptible'] = 'standard',
+        boot_disk: dict | None = None,
         gpu: GPU | None = None,
         local_ssd_disk: LocalSSD | None = None,
+        install_gpu_drivers: bool | None = None,
         **kwargs,
     ) -> batch_v1.AllocationPolicy:
         """
@@ -287,12 +300,9 @@ class JobConfig:
             Could be like this: 'projects/shared-vpc-admin/global/networks/vpcnet-shared-prod-01'.
         subnet_uri
             Could be like this: 'https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01'
+        labels, gpu, local_ssd_disk
+            These are provided by `JobConfig.__init__`. User should not provide them directly.
         """
-        if no_external_ip_address is None:
-            no_external_ip_address = True
-        if provisioning_model is None:
-            provisioning_model = 'standard'
-
         network = batch_v1.AllocationPolicy.NetworkInterface(
             network=network_uri,
             subnetwork=subnet_uri,
@@ -301,6 +311,20 @@ class JobConfig:
         provisioning_model = getattr(
             batch_v1.AllocationPolicy.ProvisioningModel, provisioning_model.upper()
         )
+
+        if gpu or machine_type.split('-')[0] in ('a2', 'a3', 'g2'):
+            if boot_disk:
+                if boot_disk.get('image', None) is None:
+                    boot_disk['image'] = 'batch-debian'
+                if boot_disk.get('size_gb', None) is None:
+                    boot_disk['size_gb'] = 50
+            else:
+                boot_disk = {'size_gb': 50, 'image': 'batch-debian'}
+            if install_gpu_drivers is None:
+                install_gpu_drivers = True
+
+        if boot_disk:
+            boot_disk = cls.BootDisk(**boot_disk)
 
         instance_policy = batch_v1.AllocationPolicy.InstancePolicy(
             machine_type=machine_type,
@@ -311,6 +335,7 @@ class JobConfig:
         )
         instance_policy_template = batch_v1.AllocationPolicy.InstancePolicyOrTemplate(
             policy=instance_policy,
+            install_gpu_drivers=install_gpu_drivers,
         )
 
         return batch_v1.AllocationPolicy(
@@ -346,18 +371,14 @@ class JobConfig:
         allocation_policy: dict,
         labels: dict[str, str] | None = None,
         logs_policy: batch_v1.LogsPolicy | None = None,
-        boot_disk: dict | None = None,
-        local_ssd: dict | None = None,
         gpu: dict | None = None,
+        local_ssd: dict | None = None,
         **kwargs,
     ):
         if gpu:
             gpu = self.GPU(**gpu)
-            assert 'gpu' not in task_group['task_spec']['container']
-            task_group['task_spec']['container']['gpu'] = gpu
-
-        if boot_disk:
-            boot_disk = self.BootDisk(**boot_disk)
+            # assert 'gpu' not in task_group['task_spec']['container']
+            # task_group['task_spec']['container']['gpu'] = gpu
 
         if local_ssd:
             local_ssd_disk = self.LocalSSD(**local_ssd)
@@ -371,7 +392,6 @@ class JobConfig:
         task_group = self.task_group(**task_group)
         allocation_policy = self.allocation_policy(
             gpu=gpu,
-            boot_disk=boot_disk,
             local_ssd_disk=local_ssd_disk,
             labels=labels,
             **allocation_policy,
@@ -394,22 +414,25 @@ class JobConfig:
         return self._job
 
     @property
+    def definition(self) -> dict:
+        # `self._job.__str__` actually is formatted nicely,
+        # but we choose to return the built-in dict type.
+        # If you want a nice printout, just print `self.job`.
+        return type(self._job).to_dict(self._job)
+
+    @property
     def region(self) -> str:
         return self._job.allocation_policy.location.allowed_locations[0].split('/')[1]
 
 
+def _call_client(method: str, *args, **kwargs):
+    with batch_v1.BatchServiceClient(credentials=get_credentials()) as client:
+        return getattr(client, method)(*args, **kwargs)
+
+
 class Job:
     @classmethod
-    def _client(cls):
-        return batch_v1.BatchServiceClient(credentials=get_credentials())
-
-    @classmethod
-    def _call_client(cls, method: str, *args, **kwargs):
-        with cls._client() as client:
-            return getattr(client, method)(*args, **kwargs)
-
-    @classmethod
-    def create(cls, *, name: str, config: JobConfig) -> Job:
+    def create(cls, name: str, config: JobConfig) -> Job:
         """
         There are some restrictions on the form of `name`; see GCP doc for details.
         In addition, the batch name must be unique. For this reason, user may want to construct the name
@@ -421,7 +444,7 @@ class Job:
             job_id=name,
             job=config.job,
         )
-        job = cls._call_client('create_job', req)
+        job = _call_client('create_job', req)
         return cls(job)
 
     @classmethod
@@ -429,10 +452,10 @@ class Job:
         req = batch_v1.ListJobsRequest(
             parent=f'projects/{get_project_id()}/locations/{region}'
         )
-        jobs = cls._call_client('list_jobs', req)
+        jobs = _call_client('list_jobs', req)
         return [cls(j) for j in jobs]
 
-    def __init__(self, name: str | batch_v1.Job, /):
+    def __init__(self, name_or_obj: str | batch_v1.Job, /):
         """
         `name` is like 'projects/<project-id>/locations/<location>/jobs/<name>'.
         This can also be considered the job "ID" or "URI".
@@ -441,12 +464,13 @@ class Job:
         `job` is not needed because it can be created if needed.
         It is accepted in case you already have it. See :meth:`create`, :meth:`list`.
         """
-        if isinstance(name, str):
-            self._name = name
-            self._job = None
+        if isinstance(name_or_obj, str):
+            self.name = name_or_obj
+            self.job = None
+            self._refresh()
         else:
-            self._name = name.name
-            self._job = name
+            self.name = name_or_obj.name
+            self.job = name_or_obj
 
     def __repr__(self):
         return f"{self.__class__.__name__}('{self.name}')"
@@ -454,21 +478,29 @@ class Job:
     def __str__(self):
         return self.__repr__()
 
-    @property
-    def name(self) -> str:
-        return self._name
-
     def _refresh(self):
         req = batch_v1.GetJobRequest(name=self.name)
-        self._job = self._call_client('get_job', req)
+        self.job = _call_client('get_job', req)
+        return self
+
+    @property
+    def create_time(self):
+        return self.job.create_time
+
+    @property
+    def update_time(self):
+        return self._refresh().job.update_time
+
+    @property
+    def definition(self) -> dict:
+        return type(self.job).to_dict(self.job)
 
     def status(self) -> batch_v1.JobStatus:
         """
         The returned `JobStatus` object has some useful attributes you can access;
         see :meth:`state` for an example.
         """
-        self._refresh()
-        return self._job.status
+        return self._refresh().job.status
 
     def state(
         self,
@@ -485,4 +517,5 @@ class Job:
 
     def delete(self) -> None:
         req = batch_v1.DeleteJobRequest(name=self.name)
-        self._call_client('delete_job', req)
+        _call_client('delete_job', req)
+        self.job = None

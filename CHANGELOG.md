@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.2.6] - 2025-01-05
+
+- Fixes and improvements to `cloudly.gcp.{batch, compute, workflows, scheduler}`.
+
+
+## [0.2.5] - 2025-01-03
+- Fixes and improvements to `cloudly.gcp.{batch, compute, workflows, scheduler}`.
+
+
 ## [0.2.4] - 2024-12-30
 
 - Move `versioned_uploadable` from `util` to `upathlib`, keeping a reference in `util` for short-term backcompat.

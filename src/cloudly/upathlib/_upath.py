@@ -44,10 +44,6 @@ from .serializer import (
     ZstdPickleSerializer,
 )
 
-# End user may want to do this:
-#  logging.getLogger('urllib3.connectionpool').setLevel(logging.ERROR)
-# to suppress the "urllib3 connection lost" warning.
-
 
 class LockAcquireError(TimeoutError):
     pass

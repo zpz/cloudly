@@ -121,7 +121,7 @@ class RateLimiter:
             if self._push_one():
                 return
             tokens = self._tokens
-            sleep(tokens.head() + self._time_window - perf_counter())
+            sleep(max(0, tokens.head() + self._time_window - perf_counter()))
             tokens.pop()
             tokens.push(perf_counter())
 
