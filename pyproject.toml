@@ -54,9 +54,9 @@ gcp = [
     "google-cloud-workflows",
     "requests",
 ]
-vertexai = [
-    "google-cloud-aiplatform",
-    "google-cloud-resource-manager",
+bigquery = [
+    "google-cloud-bigquery",
+    "google-cloud-bigquery-storage",
 ]
 test = [
     "pytest-asyncio",
