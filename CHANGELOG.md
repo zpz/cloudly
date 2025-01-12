@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.2.7] - in progress
+
+- New module `cloudly.gcp.bigquery`.
+- More tests.
+
+
 ## [0.2.6] - 2025-01-05
 
 - Fixes and improvements to `cloudly.gcp.{batch, compute, workflows, scheduler}`.

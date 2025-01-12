@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+__all__ = ['get_client', 'list_datasets', 'read_streams', 'Dataset', 'Table']
+
+
 import logging
 import queue
 import threading
 import time
 from collections.abc import Iterable, Iterator, Sequence
-from typing import Literal
+from typing import Any, Literal
 
 import google.api_core.exceptions
 from google.cloud import bigquery, bigquery_storage
@@ -312,7 +315,7 @@ class Table(_Table):
         self,
         uris: str | Sequence[str],
         *,
-        source_format: Literal['CSV', 'PARQUET', 'AVRO', 'ORC'],
+        source_format: Literal['CSV', 'PARQUET', 'AVRO', 'ORC'] = 'PARQUET',
         **kwargs,
     ) -> Job:
         """
@@ -341,12 +344,15 @@ class Table(_Table):
         )
         return Job(job)
 
-    def insert_rows(self, data: Iterable[tuple] | Iterable[dict], **kwargs):
+    def insert_rows(
+        self, data: Iterable[tuple] | Iterable[dict], **kwargs
+    ) -> list[dict[str, Any]]:
         """
         The table must physically exist in BQ.
+
+        Return info about rows that had insertion error.
         """
-        job = get_client().insert_rows(self.table, data, **kwargs)
-        return Job(job)
+        return get_client().insert_rows(self.table, data, **kwargs)
 
     def list_partitions(self) -> list[str]:
         sql = f"""\
@@ -397,7 +403,7 @@ class Table(_Table):
         table = f'projects/{self.project_id}/datasets/{self.dataset_id}/tables/{self.table_id}'
         session = bigquery_storage.types.ReadSession()
         session.table = table
-        session.table_format = bigquery_storage.types.DataFormat.ARROW
+        session.data_format = bigquery_storage.types.DataFormat.ARROW
         if selected_fields:
             session.read_options.selected_fields = selected_fields
         if row_restriction:
@@ -411,7 +417,7 @@ class Table(_Table):
             )
             return [s.name for s in session.streams]
 
-    def stream_read_rows(
+    def read_stream_rows(
         self, *, as_dict: bool = False, num_workers: int = 2, **kwargs
     ) -> Iterator:
         stream_names = self.create_streams(**kwargs)
