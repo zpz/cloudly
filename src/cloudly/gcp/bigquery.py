@@ -3,10 +3,10 @@ from __future__ import annotations
 __all__ = ['get_client', 'list_datasets', 'read_streams', 'Dataset', 'Table']
 
 
+import functools
 import logging
 import queue
 import threading
-import time
 from collections.abc import Iterable, Iterator, Sequence
 from typing import Any, Literal
 
@@ -21,13 +21,17 @@ from cloudly.util.datetime import utcnow
 logger = logging.getLogger(__name__)
 
 
+@functools.cache
 def get_client() -> bigquery.Client:
-    # TODO: cache and reuse? context managed?
+    # To execute a SQL statement that's not covered in this module,
+    # use the `query` method of the returned client.
+    #
+    # WARNING: because this object is cached, use must NOT use context manager on the returned object.
     return bigquery.Client(credentials=get_credentials(), project=get_project_id())
 
 
 def get_storage_client() -> bigquery_storage.BigQueryReadClient:
-    # TODO: cache and reuse? context managed?
+    # TODO: context managed?
     return bigquery_storage.BigQueryReadClient(credentials=get_credentials())
 
 
@@ -54,20 +58,16 @@ def read_streams(stream_names: Iterable[str]) -> Iterator[ParquetBatchData]:
 
 class Job:
     def __init__(self, job: bigquery.QueryJob | bigquery.LoadJob | bigquery.ExtractJob):
+        # `QueryJob`, `LoadJob`, `ExtractJob` all inherit from `bigquery.job.base._AsyncJob`.
+        # Several functions/methods return a `Job` object. Usually you want to call
+        # its `result()` or `wait()` right away to wait for the job to finish.
         self.job = job
 
-    def wait(self, *, sleep_seconds: float | None = None, timeout: float = None):
-        client = get_client()
-        t0 = time.perf_counter()
-        while True:
-            job = client.get_job(self.job.job_id)
-            if job.state != 'RUNNING':
-                break
-            if timeout:
-                if (time.perf_counter() - t0) >= timeout:
-                    raise TimeoutError
-            time.sleep(sleep_seconds or 1.0)
-        return job.result()  # will raise error if any
+    def result(self, **kwargs):
+        return self.job.result(**kwargs)
+
+    def wait(self, **kwargs):
+        return self.job.result(**kwargs)
 
 
 class Dataset:
@@ -307,6 +307,9 @@ class Table(_Table):
     def create(cls, sql: str):
         """
         For full flexibility, use raw SQL statement to create the table.
+
+        If a table is deleted and then created again, it may not be accessible right away
+        (getting `NotFound` error), because of "eventual consistency".
         """
         return get_client().query(sql).result()
 
@@ -357,16 +360,26 @@ class Table(_Table):
         The table must physically exist in BQ.
 
         Return info about rows that had insertion error.
+        If there was no error, an empty list is returned.
         """
         return get_client().insert_rows(self.table, data, **kwargs)
 
     def list_partitions(self) -> list[str]:
-        sql = f"""\
-            SELECT partition_id
-            FROM `{self.project_id}.{self.dataset_id}.INFORMATION_SCHEMA.PARTITIONS`
-            WHERE table_name = '{self.table_id}'"""
-        zz = get_client().query(sql).result()
-        return [z[0] for z in zz]
+        # sql = f"""\
+        #     SELECT partition_id
+        #     FROM `{self.project_id}.{self.dataset_id}.INFORMATION_SCHEMA.PARTITIONS`
+        #     WHERE table_name = '{self.table_id}'"""
+        # zz = get_client().query(sql).result()
+        # return [z[0] for z in zz]
+        try:
+            return sorted(get_client().list_partitions(self.table))
+        except google.api_core.exceptions.BadRequest as e:
+            if (
+                'Cannot read partition information from a table that is not partitioned'
+                in str(e)
+            ):
+                return None
+            raise
 
     def create_streams(
         self,
@@ -461,6 +474,7 @@ class Table(_Table):
                     if k == num_workers:
                         break
                     continue
+
                 if as_dict:
                     if batch.num_columns == 1:
                         colname = batch.column_names[0]

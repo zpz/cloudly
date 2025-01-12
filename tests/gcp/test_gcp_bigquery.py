@@ -1,11 +1,36 @@
 import pickle
 
 from cloudly.gcp import bigquery
+from cloudly.gcp.auth import get_project_id
 from cloudly.gcp.storage import GcsBlobUpath
 
 
 def test_list_datasets():
     assert 'tmp' in bigquery.list_datasets()
+
+
+def test_create():
+    name = bigquery._make_temp_name()
+    sql = f"""\
+        CREATE TABLE `{get_project_id()}.tmp.{name}` (
+            name STRING,
+            age INTEGER
+        )"""
+    z = bigquery.Table.create(sql)
+    table = bigquery.Dataset('tmp').table(name)
+    try:
+        assert table.exists()
+        z = table.insert_rows(
+            (
+                {'name': 'Tom', 'age': 28},
+                {'name': 'John', 'age': 58},
+                {'name': 'Ali', 'age': 80},
+            )
+        )
+        print(z)
+        assert table.count_rows() == 3
+    finally:
+        table.drop_if_exists()
 
 
 def test_temp_table():
@@ -28,7 +53,7 @@ def test_temp_table():
 
     print(list(tab.stream_read_rows(as_dict=True)))
 
-    assert [None] == tab.list_partitions()
+    assert tab.list_partitions() is None
 
     zz = tab.insert_rows([{'name': 'Paul', 'age': 60}, {'name': 'Jessica', 'age': 9}])
     print(zz)
@@ -44,6 +69,7 @@ def test_temp_table():
     tab2 = bigquery.Dataset('tmp').temp_table()
     tab2.load_from_uri(str(path / '*.parquet')).wait()
     yy = list(tab2.read_rows())
+    print(yy)
     assert len(yy) == len(data) + 2
 
     tab3 = bigquery.Dataset('tmp').table(tab.table_id)
