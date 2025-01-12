@@ -26,7 +26,7 @@ def test_temp_table():
 
     print(list(tab.read_rows(as_dict=False)))
 
-    print(list(tab.read_stream_rows(as_dict=True)))
+    print(list(tab.stream_read_rows(as_dict=True)))
 
     assert [None] == tab.list_partitions()
 

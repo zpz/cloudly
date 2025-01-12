@@ -38,7 +38,7 @@ def list_datasets() -> list[str]:
 
 
 def read_streams(stream_names: Iterable[str]) -> Iterator[ParquetBatchData]:
-    # The stream names are obtained by `Table.create_read_session`.
+    # The stream names are obtained by `Table.create_streams`.
     with get_storage_client() as client:
         for stream_name in stream_names:
             logger.debug("pulling data from stream '%s'", stream_name)
@@ -71,6 +71,12 @@ class Job:
 
 
 class Dataset:
+    """
+    We do not provide functions for dataset management (create, delete, etc)
+    because it's unlikely that a project need dynamic datasets.
+    For dataset management, just go to GCP dashboard.
+    """
+
     def __init__(self, dataset_id: str):
         self.dataset_id = dataset_id
 
@@ -207,7 +213,7 @@ class _Table:
         destination_format: str = 'PARQUET',
         compression: str = 'snappy',
         **kwargs,
-    ) -> Job:
+    ):
         """
         Usually, you should specify a location in Google Cloud Storage that is empty (hence it acts like a "folder").
         You can specify individual blob name(s) like "gs://mybucket/myproject/myfolder/mydata.parquet" or specify a pattern
@@ -417,7 +423,7 @@ class Table(_Table):
             )
             return [s.name for s in session.streams]
 
-    def read_stream_rows(
+    def stream_read_rows(
         self, *, as_dict: bool = False, num_workers: int = 2, **kwargs
     ) -> Iterator:
         stream_names = self.create_streams(**kwargs)
