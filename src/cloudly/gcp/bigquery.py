@@ -1,13 +1,21 @@
 from __future__ import annotations
 
-__all__ = ['get_client', 'list_datasets', 'read_streams', 'Dataset', 'Table']
+__all__ = [
+    'get_client',
+    'get_storage_client',
+    'list_datasets',
+    'read_streams',
+    'Dataset',
+    'Table',
+    'SchemaField',
+]
 
 
-import functools
 import logging
 import queue
 import threading
 from collections.abc import Iterable, Iterator, Sequence
+from multiprocessing.util import Finalize
 from typing import Any, Literal
 
 import google.api_core.exceptions
@@ -21,53 +29,52 @@ from cloudly.util.datetime import utcnow
 logger = logging.getLogger(__name__)
 
 
-@functools.cache
 def get_client() -> bigquery.Client:
     # To execute a SQL statement that's not covered in this module,
     # use the `query` method of the returned client.
-    #
-    # WARNING: because this object is cached, use must NOT use context manager on the returned object.
-    return bigquery.Client(credentials=get_credentials(), project=get_project_id())
+    client = bigquery.Client(credentials=get_credentials(), project=get_project_id())
+
+    # This is what `client.close()` or `client.__exit__(...)` does.
+    def close_client(http):
+        http._auth_request.session.close()
+        http.close()
+
+    Finalize(client, close_client, args=(client._http,))
+    return client
 
 
 def get_storage_client() -> bigquery_storage.BigQueryReadClient:
-    # TODO: context managed?
-    return bigquery_storage.BigQueryReadClient(credentials=get_credentials())
+    client = bigquery_storage.BigQueryReadClient(credentials=get_credentials())
+
+    # `client.transport.close()` is what `client.__exit__(...)` does.
+    Finalize(client, client.transport.close)
+
+    return client
 
 
-def list_datasets() -> list[str]:
-    datasets = get_client().list_datasets()
+def list_datasets(project_id: str = None) -> list[str]:
+    datasets = get_client().list_datasets(project=project_id or get_project_id())
     ids = sorted(d.dataset_id for d in datasets)
     return ids
 
 
 def read_streams(stream_names: Iterable[str]) -> Iterator[ParquetBatchData]:
+    # The "Storage API" is used to pull data at high speed and throughput from a large table by
+    # concurrently pulling from "streams".
     # The stream names are obtained by `Table.create_streams`.
-    with get_storage_client() as client:
-        for stream_name in stream_names:
-            logger.debug("pulling data from stream '%s'", stream_name)
-            reader = client.read_rows(stream_name)
-            npages = 0
-            for page in reader.rows().pages:
-                yield ParquetBatchData(page.to_arrow())
-                npages += 1
-            logger.debug(
-                "pulled data from stream '%s' with %d pages", stream_name, npages
-            )
-
-
-class Job:
-    def __init__(self, job: bigquery.QueryJob | bigquery.LoadJob | bigquery.ExtractJob):
-        # `QueryJob`, `LoadJob`, `ExtractJob` all inherit from `bigquery.job.base._AsyncJob`.
-        # Several functions/methods return a `Job` object. Usually you want to call
-        # its `result()` or `wait()` right away to wait for the job to finish.
-        self.job = job
-
-    def result(self, **kwargs):
-        return self.job.result(**kwargs)
-
-    def wait(self, **kwargs):
-        return self.job.result(**kwargs)
+    # The stream names returned by `Table.create_streams` may be passed to multiple
+    # workers (threads, processes, machines) for concurrent and/or distributed consumption.
+    # This function shows how one worker can consume an iterable of stream names.
+    # User may need to adapt this code with additional setup.
+    client = get_storage_client()
+    for stream_name in stream_names:
+        logger.debug("pulling data from stream '%s'", stream_name)
+        reader = client.read_rows(stream_name)
+        npages = 0
+        for page in reader.rows().pages:
+            yield ParquetBatchData(page.to_arrow())
+            npages += 1
+        logger.debug("pulled data from stream '%s' with %d pages", stream_name, npages)
 
 
 class Dataset:
@@ -77,19 +84,28 @@ class Dataset:
     For dataset management, just go to GCP dashboard.
     """
 
-    def __init__(self, dataset_id: str):
+    def __init__(self, dataset_id: str, project_id: str = None):
         self.dataset_id = dataset_id
+        self.project_id = project_id or get_project_id()
+
+    @property
+    def dataset(self) -> bigquery.Dataset:
+        return get_client().get_dataset(
+            bigquery.DatasetReference.from_string(self.dataset_id, self.project_id)
+        )
 
     def list_tables(self) -> list[str]:
-        tables = get_client().list_tables(self.dataset_id)
+        tables = get_client().list_tables(self.dataset)
         return sorted(t.table_id for t in tables if t.table_type == 'TABLE')
 
     def list_external_tables(self) -> list[str]:
-        tables = get_client().list_tables(self.dataset_id)
+        tables = get_client().list_tables(self.dataset)
         return sorted(t.table_id for t in tables if t.table_type == 'EXTERNAL')
 
     def table(self, table_id: str) -> Table:
-        return Table(table_id=table_id, dataset_id=self.dataset_id)
+        return Table(
+            table_id=table_id, dataset_id=self.dataset_id, project_id=self.project_id
+        )
 
     def temp_table(self, *, prefix=None, postfix=None) -> Table:
         """
@@ -111,7 +127,9 @@ class Dataset:
         return t
 
     def external_table(self, table_id: str) -> ExternalTable:
-        return ExternalTable(table_id=table_id, dataset_id=self.dataset_id)
+        return ExternalTable(
+            table_id=table_id, dataset_id=self.dataset_id, project_id=self.project_id
+        )
 
 
 class _Table:
@@ -151,11 +169,9 @@ class _Table:
     def drop(self, *, not_found_ok: bool = False):
         get_client().delete_table(self.qualified_table_id, not_found_ok=not_found_ok)
         # May raise `google.api_core.exceptions.NotFound`.
-        return self
 
     def drop_if_exists(self):
         self.drop(not_found_ok=True)
-        return self
 
     def count_rows(self) -> int:
         sql = f'SELECT COUNT(*) FROM `{self.qualified_table_id}`'
@@ -212,6 +228,7 @@ class _Table:
         *,
         destination_format: str = 'PARQUET',
         compression: str = 'snappy',
+        wait: bool = True,
         **kwargs,
     ):
         """
@@ -230,7 +247,7 @@ class _Table:
             dest_uris,
             job_config=job_config,
         )
-        return Job(job)
+        return job.result() if wait else job
 
 
 def _load_job_config(
@@ -299,34 +316,71 @@ class Table(_Table):
     """
     A `Table` object is an in-memory representation. A corresponding table may or may not exist in BQ.
 
-    The `load_*` methods by default will populate a new table, typically auto-detecting the schema.
-    If the table already exists, an exception is raised. There are options to make them append to an existing table.
+    The `load_*` methods by default will populate a new (or empty) table, typically auto-detecting the schema.
+    There are options to make them append to an existing table.
+
+    Some method require the table to not yet exist in BQ. For example, :meth:`create`.
+
+    Some methods require the table to exist, for example, `insert_rows` and the data-reading methods.
     """
 
-    @classmethod
-    def create(cls, sql: str):
+    def create(
+        self,
+        columns: Sequence[SchemaField | tuple[str, str] | tuple[str, str, str]],
+        *,
+        clustering_fields: Sequence[str] | None = None,
+    ):
         """
-        For full flexibility, use raw SQL statement to create the table.
+        Create the "physical" table in BQ.
+
+        At this moment, `self` contains name of the table, but the table does not actually
+        exist in BQ. If the table already exists, an exception will be raised.
+
+        This method only supports simple table definition. For more flexibility,
+        use `get_client().query(...)` with the raw SQL statement for table creation.
 
         If a table is deleted and then created again, it may not be accessible right away
         (getting `NotFound` error), because of "eventual consistency".
-        """
-        return get_client().query(sql).result()
 
-    def load_from_query(self, sql: str, **kwargs) -> Job:
+        Parameters
+        ----------
+        columns
+            Column definitions. For any column that is defined by a tuple of strings,
+            the most reliable form is two strings specifying "name" and "type".
+            A third string would specify "mode" with acceptable values including
+            "NULLABLE" (default), "REQUIRED", and "REPEATED". Any column spec with
+            more than three strings would be hard to maintain.
+        clustering
+            This is a list of columns to cluster the table by.
+            Clustering is analogous to indexing.
+        """
+        schema = [
+            col if isinstance(col, SchemaField) else SchemaField(*col)
+            for col in columns
+        ]
+        table = bigquery.Table(self.qualified_table_id, schema=schema)
+        if clustering_fields:
+            table.clustering_fields = clustering_fields
+        get_client().create_table(table, exists_ok=False)
+        # If the table exists, `google.api_core.exceptions.Conflict` will be raised.
+        return self
+
+    def load_from_query(self, sql: str, *, wait: bool = True, **kwargs):
         """
         Load the result of the query `sql` into the current table.
         """
         job_config = _query_job_config(destination=self.qualified_table_id, **kwargs)
-        return Job(get_client().query(sql, job_config=job_config))
+        job = get_client().query(sql, job_config=job_config)
+        return job.result() if wait else job
 
     def load_from_uri(
         self,
         uris: str | Sequence[str],
         *,
+        wait: bool = True,
         source_format: Literal['CSV', 'PARQUET', 'AVRO', 'ORC'] = 'PARQUET',
         **kwargs,
-    ) -> Job:
+    ):
         """
         Load the content of the data files into the current table.
 
@@ -337,21 +391,25 @@ class Table(_Table):
         job = get_client().load_table_from_uri(
             uris, destination=self.qualified_table_id, job_config=job_config
         )
-        return Job(job)
+        return job.result() if wait else job
 
     def load_from_json(
         self,
         data: Iterable[dict],
+        *,
+        wait: bool = True,
         **kwargs,
-    ) -> Job:
+    ):
         """
         `data` is an iterable of dicts for rows.
+
+        Actually, the `data` doesn't have much to do with "json".
         """
         job_config = _load_job_config(**kwargs)
         job = get_client().load_table_from_json(
             data, destination=self.qualified_table_id, job_config=job_config
         )
-        return Job(job)
+        return job.result() if wait else job
 
     def insert_rows(
         self, data: Iterable[tuple] | Iterable[dict], **kwargs
@@ -372,7 +430,7 @@ class Table(_Table):
         # zz = get_client().query(sql).result()
         # return [z[0] for z in zz]
         try:
-            return sorted(get_client().list_partitions(self.table))
+            return sorted(get_client().list_partitions(self.qualified_table_id))
         except google.api_core.exceptions.BadRequest as e:
             if (
                 'Cannot read partition information from a table that is not partitioned'
@@ -428,17 +486,27 @@ class Table(_Table):
         if row_restriction:
             session.read_options.row_restriction = row_restriction
 
-        with get_storage_client() as client:
-            session = client.create_read_session(
-                parent=f'projects/{self.project_id}',
-                read_session=session,
-                max_stream_count=max_stream_count,
-            )
-            return [s.name for s in session.streams]
+        client = get_storage_client()
+        session = client.create_read_session(
+            parent=f'projects/{self.project_id}',
+            read_session=session,
+            max_stream_count=max_stream_count,
+        )
+        return [s.name for s in session.streams]
 
     def stream_read_rows(
         self, *, as_dict: bool = False, num_workers: int = 2, **kwargs
     ) -> Iterator:
+        """
+        This method uses background threads to pull the table data using the "Storage API".
+        The pulled row data are transferred to the current thread to be yielded, and consumed
+        by the caller of this method. This is meant for high-throughput data pull of a large table.
+
+        Note that the data are consumed in the current thread (by the caller of this method).
+        If it is more suitable to consume the data concurrently in multiple threads or processes
+        (or even distributed machines), this method is not the right solution. Instead, see
+        :func:`read_streams`.
+        """
         stream_names = self.create_streams(**kwargs)
         q = queue.SimpleQueue()
         for n in stream_names:
@@ -458,43 +526,83 @@ class Table(_Table):
                     q_out.put(ParquetBatchData(page.to_arrow()))
 
         qq = queue.Queue(maxsize=1000)
-        with get_storage_client() as client:
-            workers = [
-                threading.Thread(target=read, args=(q, qq, client))
-                for _ in range(num_workers)
-            ]
-            for w in workers:
-                w.start()
+        client = get_storage_client()
 
-            k = 0
-            while True:
-                batch = qq.get()
-                if batch is None:
-                    k += 1
-                    if k == num_workers:
-                        break
-                    continue
+        workers = [
+            threading.Thread(target=read, args=(q, qq, client))
+            for _ in range(num_workers)
+        ]
+        for w in workers:
+            w.start()
 
-                if as_dict:
-                    if batch.num_columns == 1:
-                        colname = batch.column_names[0]
-                        for x in batch:
-                            yield {colname: x}
-                    else:
-                        yield from batch
+        k = 0
+        while True:
+            batch = qq.get()
+            if batch is None:
+                k += 1
+                if k == num_workers:
+                    break
+                continue
+
+            if as_dict:
+                if batch.num_columns == 1:
+                    colname = batch.column_names[0]
+                    for x in batch:
+                        yield {colname: x}
                 else:
-                    if batch.num_columns == 1:
-                        for x in batch:
-                            yield (x,)
-                    else:
-                        for row in batch:
-                            yield tuple(row.values())
+                    yield from batch
+            else:
+                if batch.num_columns == 1:
+                    for x in batch:
+                        yield (x,)
+                else:
+                    for row in batch:
+                        yield tuple(row.values())
 
 
 class ExternalTable(_Table):
-    @classmethod
-    def create(cls, sql: str):
+    def create(
+        self,
+        source_uris: str | Sequence[str],
+        *,
+        source_format: Literal['AVRO', 'CSV', 'ORC', 'PARQUET'] = 'PARQUET',
+        schema: Sequence[SchemaField] | None = None,
+        options=None,
+    ):
         """
-        For full flexibility, use raw SQL statement to create the table.
+        Parameters
+        ----------
+        source_uris
+            Blobs in Google Cloud Storage, optionally containing '*' patterns, like "gs://mybucket/myproject/myfolder/*.parquet".
+        options
+            Additional options to go with `source_format`.
+
+        For more flexible table definitions, use `get_client().query(...)` with raw SQL statements.
         """
-        return get_client().query(sql).result()
+        if isinstance(source_uris, str):
+            source_uris = [source_uris]
+        config = bigquery.ExternalTable(source_format)
+        config.source_uris = source_uris
+        config.autodetect = schema is None
+        if schema is not None:
+            config.schema = schema
+        if options:
+            if source_format == 'AVRO':
+                config.avro_options = options
+            elif source_format == 'CSV':
+                config.csv_options = options
+            elif source_format == 'PARQUET':
+                config.parquet_options = options
+            elif source_format == 'ORC':
+                raise ValueError(
+                    "the 'ORC' source format does not take additional options"
+                )
+            else:
+                raise ValueError(
+                    f"unknown value for `source_format`: '{source_format}'"
+                )
+        table = bigquery.Table(self.qualified_table_id, schema=schema)
+        table.external_data_configuration = config
+        get_client().create_table(table, exists_ok=False)
+        # If the table exists, `google.api_core.exceptions.Conflict` will be raised.
+        return self

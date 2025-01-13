@@ -1,5 +1,8 @@
 import pickle
 
+import google.api_core.exceptions
+import pytest
+
 from cloudly.gcp import bigquery
 from cloudly.gcp.auth import get_project_id
 from cloudly.gcp.storage import GcsBlobUpath
@@ -10,15 +13,7 @@ def test_list_datasets():
 
 
 def test_create():
-    name = bigquery._make_temp_name()
-    sql = f"""\
-        CREATE TABLE `{get_project_id()}.tmp.{name}` (
-            name STRING,
-            age INTEGER
-        )"""
-    z = bigquery.Table.create(sql)
-    table = bigquery.Dataset('tmp').table(name)
-    try:
+    def check_table(table):
         assert table.exists()
         z = table.insert_rows(
             (
@@ -29,8 +24,45 @@ def test_create():
         )
         print(z)
         assert table.count_rows() == 3
+
+    name = bigquery._make_temp_name()
+    sql = f"""\
+        CREATE TABLE `{get_project_id()}.tmp.{name}` (
+            name STRING,
+            age INTEGER
+        )"""
+    bigquery.get_client().query(sql)
+    table = bigquery.Dataset('tmp').table(name)
+    try:
+        check_table(table)
+        with pytest.raises(google.api_core.exceptions.Conflict):
+            table.create([('name', 'STRING'), ('age', 'INTEGER')])
     finally:
-        table.drop_if_exists()
+        table.drop()
+
+    table = bigquery.Dataset('tmp').temp_table()
+    table.create(
+        [
+            ('name', 'STRING'),
+            ('age', 'INTEGER'),
+        ]
+    )
+    try:
+        check_table(table)
+    finally:
+        table.drop()
+
+    table = bigquery.Dataset('tmp').temp_table()
+    table.create(
+        [
+            ('name', 'STRING', 'REQUIRED'),
+            bigquery.SchemaField('age', 'INTEGER'),
+        ]
+    )
+    try:
+        check_table(table)
+    finally:
+        table.drop()
 
 
 def test_temp_table():
@@ -44,7 +76,7 @@ def test_temp_table():
 
     tab = bigquery.Dataset('tmp').temp_table()
     print(tab.qualified_table_id)
-    z = tab.load_from_json(data).wait()
+    z = tab.load_from_json(data)
     print(z)
     y = list(tab.read_rows())
     assert len(y) == len(data)
@@ -67,7 +99,7 @@ def test_temp_table():
     tab.extract_to_uri(str(path / 'part-*.parquet'))
 
     tab2 = bigquery.Dataset('tmp').temp_table()
-    tab2.load_from_uri(str(path / '*.parquet')).wait()
+    tab2.load_from_uri(str(path / '*.parquet'))
     yy = list(tab2.read_rows())
     print(yy)
     assert len(yy) == len(data) + 2
@@ -82,7 +114,7 @@ def test_temp_table():
 
     sql = f'SELECT name FROM `{tab.qualified_table_id}` WHERE age > 30'
     older = bigquery.Dataset('tmp').temp_table()
-    older.load_from_query(sql).wait()
+    older.load_from_query(sql)
     names = sorted(row['name'] for row in older.read_rows(as_dict=True))
     assert names == sorted(['Tom', 'Peter', 'Luke', 'Paul'])
 
