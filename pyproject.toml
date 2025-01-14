@@ -9,8 +9,10 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "filelock >= 3.9.1",
-    "pyarrow >= 12.0.1",
+    "fastavro",
+    "filelock",
+    "orjson",
+    "pyarrow",
     "tqdm",
     "typing-extensions",
     "tzdata",
