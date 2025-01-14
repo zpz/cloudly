@@ -15,11 +15,14 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 from uuid import uuid4
 
+import fastavro
 from typing_extensions import Self
 
 from cloudly.upathlib import PathType, Upath, resolve_path
 from cloudly.upathlib.serializer import (
-    JsonSerializer,
+    AvroSerializer,
+    CsvSerializer,
+    NewlineDelimitedOrjsonSeriealizer,
     ParquetSerializer,
     PickleSerializer,
     Serializer,
@@ -39,9 +42,12 @@ logger = logging.getLogger(__name__)
 
 class Biglist(BiglistBase[Element]):
     registered_storage_formats = {
-        'json': JsonSerializer,
+        'avro': AvroSerializer,
         'pickle': PickleSerializer,
         'pickle-zstd': ZstdPickleSerializer,
+        'parquet': ParquetSerializer,
+        'csv': CsvSerializer,
+        'newline-delimited-json': NewlineDelimitedOrjsonSeriealizer,
     }
 
     DEFAULT_STORAGE_FORMAT = 'pickle-zstd'
@@ -89,6 +95,7 @@ class Biglist(BiglistBase[Element]):
         *,
         batch_size: int | None = None,
         storage_format: str | None = None,
+        datafile_ext: str | None = None,
         serialize_kwargs: dict | None = None,
         deserialize_kwargs: dict | None = None,
         init_info: dict = None,
@@ -143,6 +150,11 @@ class Biglist(BiglistBase[Element]):
         storage_format
             This should be a key in :data:`registered_storage_formats`.
             If not specified, :data:`DEFAULT_STORAGE_FORMAT` is used.
+        datafile_ext
+            Extension of data files. If not provided, an extension based on the `storage_format` value
+            is used. This is especially useful when `storage_format` is a long string.
+
+            This is used when writing data, and ignored when reading data.
         serialize_kwargs
             Additional keyword arguments to the serialization function.
         deserialize_kwargs
@@ -180,10 +192,21 @@ class Biglist(BiglistBase[Element]):
             storage_format = cls.DEFAULT_STORAGE_FORMAT
         if storage_format.replace('_', '-') not in cls.registered_storage_formats:
             raise ValueError(f"invalid value of `storage_format`: '{storage_format}'")
+        if datafile_ext is None:
+            if storage_format == 'newline-delimited-json':
+                datafile_ext = 'json'
+            else:
+                datafile_ext = storage_format.replace('-', '_')
+
+        if storage_format == 'avro':
+            serialize_kwargs['schema'] = fastavro.parse_schema(
+                serialize_kwargs['schema']
+            )
 
         init_info = {
             **(init_info or {}),
             'storage_format': storage_format.replace('_', '-'),
+            'datafile_ext': datafile_ext,
             'storage_version': 3,
             # `storage_version` is a flag for certain breaking changes in the implementation,
             # such that certain parts of the code (mainly concerning I/O) need to
@@ -474,7 +497,9 @@ class Biglist(BiglistBase[Element]):
         buffer_len = len(buffer)
         self._append_buffer = []
 
-        datafile_ext = self.storage_format.replace('-', '_')
+        datafile_ext = self.info.get('datafile_ext') or self.storage_format.replace(
+            '-', '_'
+        )
         filename = f'{self.make_file_name(buffer_len)}.{datafile_ext}'
 
         data_file = self.data_path / filename
@@ -870,6 +895,3 @@ class BiglistFileSeq(FileSeq[BiglistFileReader]):
     def __getitem__(self, idx: int):
         file = self._data_files_info[idx][0]
         return BiglistFileReader(file, self._file_loader)
-
-
-Biglist.register_storage_format('parquet', ParquetSerializer)

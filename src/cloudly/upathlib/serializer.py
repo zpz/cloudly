@@ -1,3 +1,4 @@
+import csv
 import gc
 import io
 import json
@@ -8,6 +9,8 @@ from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
 from typing import Protocol, TypeVar
 
+import fastavro
+import orjson
 import pyarrow
 import zstandard
 
@@ -153,6 +156,247 @@ class ZstdPickleSerializer(PickleSerializer):
     def deserialize(cls, y, **kwargs):
         y = cls._compressor.decompress(y)
         return super().deserialize(y, **kwargs)
+
+    class OrjsonSerializer(Serializer):
+        @classmethod
+        def serialize(cls, x, **kwargs) -> bytes:
+            return orjson.dumps(x, **kwargs)
+
+        @classmethod
+        def deserialize(cls, y: bytes, **kwargs):
+            return orjson.loads(y, **kwargs)
+
+    class ZOrjsonSerializer(OrjsonSerializer):
+        # In general, this is not the best choice of compression.
+        # Use `zstandard` or `lz4 instead.
+        @classmethod
+        def serialize(cls, x, *, level=ZLIB_LEVEL, **kwargs) -> bytes:
+            y = super().serialize(x, **kwargs)
+            return zlib.compress(y, level=level)
+
+        @classmethod
+        def deserialize(cls, y, **kwargs):
+            y = zlib.decompress(y)
+            return super().deserialize(y, **kwargs)
+
+    class ZstdOrjsonSerializer(OrjsonSerializer):
+        _compressor = ZstdCompressor()
+
+        @classmethod
+        def serialize(cls, x, *, level=ZSTD_LEVEL, threads=0, **kwargs) -> bytes:
+            y = super().serialize(x, **kwargs)
+            return cls._compressor.compress(y, level=level, threads=threads)
+
+        @classmethod
+        def deserialize(cls, y, **kwargs):
+            y = cls._compressor.decompress(y)
+            return super().deserialize(y, **kwargs)
+
+
+class OrjsonSerializer(Serializer):
+    @classmethod
+    def serialize(cls, x, **kwargs) -> bytes:
+        return orjson.dumps(x, **kwargs)
+
+    @classmethod
+    def deserialize(cls, y: bytes, **kwargs):
+        return orjson.loads(y, **kwargs)
+
+
+# class ZOrjsonSerializer(OrjsonSerializer):
+#     # In general, this is not the best choice of compression.
+#     # Use `zstandard` or `lz4 instead.
+#     @classmethod
+#     def serialize(cls, x, *, level=ZLIB_LEVEL, **kwargs) -> bytes:
+#         y = super().serialize(x, **kwargs)
+#         return zlib.compress(y, level=level)
+
+#     @classmethod
+#     def deserialize(cls, y, **kwargs):
+#         y = zlib.decompress(y)
+#         return super().deserialize(y, **kwargs)
+
+
+# class ZstdOrjsonSerializer(OrjsonSerializer):
+#     _compressor = ZstdCompressor()
+
+#     @classmethod
+#     def serialize(cls, x, *, level=ZSTD_LEVEL, threads=0, **kwargs) -> bytes:
+#         y = super().serialize(x, **kwargs)
+#         return cls._compressor.compress(y, level=level, threads=threads)
+
+#     @classmethod
+#     def deserialize(cls, y, **kwargs):
+#         y = cls._compressor.decompress(y)
+#         return super().deserialize(y, **kwargs)
+
+
+class NewlineDelimitedOrjsonSeriealizer(Serializer):
+    # This format does not require the rows to have compatible format,
+    # as each row is independently JSON serialized and deserialized,
+    # although in practice the file is typically a data files with rows of
+    # a certain common format.
+    @classmethod
+    def serialize(cls, x: Iterable[T], **kwargs):
+        return b'\r\n'.join(orjson.dumps(row, **kwargs) for row in x)
+
+    @classmethod
+    def deserialize(cls, y, **kwargs) -> list[T]:
+        # Note that JSON serialize/deserialize will change tuples to lists,
+        # because JSON does not have a tuple type.
+        return [orjson.loads(row, **kwargs) for row in y.split(b'\r\n')]
+
+
+class CsvSerializer(Serializer):
+    # CSV requires the rows to have some consistent format.
+    # There are options to handle missing fields, extra fields, etc.
+    @classmethod
+    def serialize(
+        cls,
+        x: Iterable[tuple] | Iterable[dict],
+        *,
+        fieldnames: Sequence[str] | None = None,
+        **kwargs,
+    ) -> bytes:
+        try:
+            row = next(x)
+        except TypeError:
+            x = iter(x)
+            row = next(x)
+
+        sink = io.StringIO()
+        if isinstance(row, dict):
+            # Writing dicts in this branch could be much slower than
+            # writing tuples in the next branch.
+            if fieldnames is None:
+                fieldnames = list(row.keys())
+            writer = csv.DictWriter(sink, fieldnames=fieldnames, **kwargs)
+            writer.writeheader()
+            writer.writerow(row)
+            writer.writerows(x)
+        else:
+            if not fieldnames:
+                raise ValueError(
+                    '`fieldnames` is required when data rows are sequences'
+                )
+            writer = csv.writer(sink, **kwargs)
+            writer.writerow(fieldnames)
+            writer.writerow(row)
+            writer.writerows(x)
+
+        sink.seek(0)
+        return sink.getvalue().encode('utf-8')
+
+    @classmethod
+    def deserialize(cls, y: bytes, **kwargs) -> list[tuple]:
+        y = io.StringIO(y.decode('utf-8'))
+        reader = csv.reader(y, **kwargs)
+        return [tuple(row) for row in reader]
+        # The first row is `fieldnames`.
+
+
+def _make_avro_schema(x, name: str) -> dict:
+    if isinstance(x, int):
+        return {'name': name, 'type': 'int'}
+    if isinstance(x, float):
+        return {'name': name, 'type': 'double'}
+    if isinstance(x, str):
+        return {'name': name, 'type': 'string'}
+    if isinstance(x, dict):
+        fields = []
+        for key, val in x.items():
+            z = _make_avro_schema(val, key)
+            if len(z) < 3:
+                fields.append(z)
+            else:
+                fields.append({'name': key, 'type': z})
+        return {'name': name, 'type': 'record', 'fields': fields}
+    if isinstance(x, list):
+        assert len(x) > 0, (
+            'empty list is not supported, ' 'because its type can not be inferred'
+        )
+        z0 = _make_avro_schema(x[0], name + '_item')
+        if len(x) > 1:
+            for v in x[1:]:
+                z1 = _make_avro_schema(v, name + '_item')
+                assert (
+                    z1 == z0
+                ), f'schema for x[0] ({x[0]}): {z0}; schema for x[?] ({v}): {z1}'
+        if len(z0) < 3:
+            items = z0['type']
+        else:
+            items = z0
+        return {'name': name, 'type': 'array', 'items': items}
+
+    raise ValueError('unrecognized value of type "' + type(x).__name__ + '"')
+
+
+def make_avro_schema(value: dict, name: str, namespace: str) -> dict:
+    """
+    `value` is a `dict` whose members are either 'simple types' or 'compound types'.
+
+    'simple types' include:
+        int, float, str
+
+    'compound types' include:
+        dict: whose elements are simple or compound types
+        list: whose elements are all the same simple or compound type
+    """
+    sch = {'namespace': namespace, **_make_avro_schema(value, name)}
+    return sch
+
+
+class AvroSerializer(Serializer):
+    @classmethod
+    def serialize(cls, x: Iterable[dict], *, schema: dict) -> io.BytesIO:
+        # If this function is used repeatedly, you want to call `fastavro.parsed_schema`
+        # and pass in its output as `schema`.
+        # You may infer the schema use :func:`make_avro_schema` given an example data element.
+        sink = io.BytesIO()
+        fastavro.writer(sink, schema, x)
+        sink.seek(0)
+        return sink
+
+    @classmethod
+    def deserialize(cls, y) -> list[dict]:
+        try:
+            memoryview(y)
+        except TypeError:
+            pass  # `y` is a file-like object
+        else:
+            # `y` is a bytes-like object
+            y = io.BytesIO(y)
+        return list(fastavro.reader(y))
+
+
+try:
+    # To use this, just install the Python package `lz4`.
+    import lz4.frame
+except ImportError:
+    pass
+else:
+
+    class Lz4PickleSerializer(PickleSerializer):
+        @classmethod
+        def serialize(cls, x, *, level=LZ4_LEVEL, **kwargs) -> bytes:
+            y = super().serialize(x, **kwargs)
+            return lz4.frame.compress(y, compression_level=level)
+
+        @classmethod
+        def deserialize(cls, y, **kwargs):
+            y = lz4.frame.decompress(y)
+            return super().deserialize(y, **kwargs)
+
+    # class Lz4OrjsonSerializer(OrjsonSerializer):
+    #     @classmethod
+    #     def serialize(cls, x, *, level=LZ4_LEVEL, **kwargs) -> bytes:
+    #         y = super().serialize(x, **kwargs)
+    #         return lz4.frame.compress(y, compression_level=level)
+
+    #     @classmethod
+    #     def deserialize(cls, y, **kwargs):
+    #         y = lz4.frame.decompress(y)
+    #         return super().deserialize(y, **kwargs)
 
 
 def make_parquet_type(type_spec: str | Sequence):
@@ -352,83 +596,3 @@ class ParquetSerializer(Serializer):
             y = io.BytesIO(y)
         table = pyarrow.parquet.ParquetFile(y, **kwargs).read()
         return table.to_pylist()
-
-
-try:
-    # To use this, just install the Python package `lz4`.
-    import lz4.frame
-except ImportError:
-    pass
-else:
-
-    class Lz4PickleSerializer(PickleSerializer):
-        @classmethod
-        def serialize(cls, x, *, level=LZ4_LEVEL, **kwargs) -> bytes:
-            y = super().serialize(x, **kwargs)
-            return lz4.frame.compress(y, compression_level=level)
-
-        @classmethod
-        def deserialize(cls, y, **kwargs):
-            y = lz4.frame.decompress(y)
-            return super().deserialize(y, **kwargs)
-
-
-try:
-    # To use this, just install the Python package `orjson`.
-    import orjson
-except ImportError:
-    pass
-else:
-
-    class OrjsonSerializer(Serializer):
-        @classmethod
-        def serialize(cls, x, **kwargs) -> bytes:
-            return orjson.dumps(x, **kwargs)
-
-        @classmethod
-        def deserialize(cls, y: bytes, **kwargs):
-            return orjson.loads(y, **kwargs)
-
-    class ZOrjsonSerializer(OrjsonSerializer):
-        # In general, this is not the best choice of compression.
-        # Use `zstandard` or `lz4 instead.
-        @classmethod
-        def serialize(cls, x, *, level=ZLIB_LEVEL, **kwargs) -> bytes:
-            y = super().serialize(x, **kwargs)
-            return zlib.compress(y, level=level)
-
-        @classmethod
-        def deserialize(cls, y, **kwargs):
-            y = zlib.decompress(y)
-            return super().deserialize(y, **kwargs)
-
-    class ZstdOrjsonSerializer(OrjsonSerializer):
-        _compressor = ZstdCompressor()
-
-        @classmethod
-        def serialize(cls, x, *, level=ZSTD_LEVEL, threads=0, **kwargs) -> bytes:
-            y = super().serialize(x, **kwargs)
-            return cls._compressor.compress(y, level=level, threads=threads)
-
-        @classmethod
-        def deserialize(cls, y, **kwargs):
-            y = cls._compressor.decompress(y)
-            return super().deserialize(y, **kwargs)
-
-    try:
-        # To use this, just install the Python package `lz4`.
-        import lz4.frame
-    except ImportError:
-        pass
-    else:
-
-        class Lz4OrjsonSerializer(OrjsonSerializer):
-            @classmethod
-            def serialize(cls, x, *, level=LZ4_LEVEL, **kwargs) -> bytes:
-                y = super().serialize(x, **kwargs)
-                return lz4.frame.compress(y, compression_level=level)
-
-            @classmethod
-            def deserialize(cls, y, **kwargs):
-                y = lz4.frame.decompress(y)
-                return super().deserialize(y, **kwargs)

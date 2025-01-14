@@ -21,6 +21,7 @@ from typing import Any, Literal
 import google.api_core.exceptions
 from google.cloud import bigquery, bigquery_storage
 from google.cloud.bigquery import RangePartitioning, SchemaField, TimePartitioning
+from typing_extensions import Self
 
 from cloudly.biglist.parquet import ParquetBatchData
 from cloudly.gcp.auth import get_credentials, get_project_id
@@ -166,12 +167,14 @@ class _Table:
         except google.api_core.exceptions.NotFound:
             return False
 
-    def drop(self, *, not_found_ok: bool = False):
+    def drop(self, *, not_found_ok: bool = False) -> Self:
         get_client().delete_table(self.qualified_table_id, not_found_ok=not_found_ok)
         # May raise `google.api_core.exceptions.NotFound`.
+        return self
 
-    def drop_if_exists(self):
+    def drop_if_exists(self) -> Self:
         self.drop(not_found_ok=True)
+        return self
 
     def count_rows(self) -> int:
         sql = f'SELECT COUNT(*) FROM `{self.qualified_table_id}`'
@@ -329,7 +332,7 @@ class Table(_Table):
         columns: Sequence[SchemaField | tuple[str, str] | tuple[str, str, str]],
         *,
         clustering_fields: Sequence[str] | None = None,
-    ):
+    ) -> Self:
         """
         Create the "physical" table in BQ.
 

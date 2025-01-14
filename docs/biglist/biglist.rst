@@ -284,7 +284,7 @@ In each worker process, we will open this biglist by ``Biglist(path)`` and appen
 Now that this has a presence on the disk, ``Biglist(path)`` will not complain the dataset does not exist.
 
 >>> yourlist.info
-{'storage_format': 'pickle-zstd', 'storage_version': 3, 'batch_size': 6, 'data_files_info': []}
+{'storage_format': 'pickle-zstd', 'datafile_ext': 'pickle_zstd', 'storage_version': 3, 'batch_size': 6, 'data_files_info': []}
 >>> yourlist.path
 LocalUpath('/tmp/a/b/c/d')
 >>> len(yourlist)

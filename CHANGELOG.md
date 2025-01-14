@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - New module `cloudly.gcp.bigquery`.
 - More tests.
+- New classes `cloudly.utpathlib.serializer.{NewlineDelimitedOrjsonSerializer, CsvSerializer, AvroSerializer}`; all are usable by "biglist".
+- `Biglist.new` gets a new parameter `datafile_ext` to specify the extension of the data files.
 
 
 ## [0.2.6] - 2025-01-05
