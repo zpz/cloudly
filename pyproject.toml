@@ -47,6 +47,7 @@ gcp = [
     "google-auth",
     "google-api-core",
     "google-api-python-client",
+    "google-cloud-aiplatform",
     "google-cloud-batch",
     "google-cloud-compute",
     "google-cloud-logging",
