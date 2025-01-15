@@ -2,7 +2,7 @@
 
   from cloudly.upathlib import LocalUpath
   from cloudly.biglist.parquet import write_arrays_to_parquet
-  from cloudly.biglist import ParquetBiglist
+  from cloudly.biglist import ExternalBiglist
   from cloudly.util.seq import Slicer
 
   path = LocalUpath('/tmp/a/b/c/e')
@@ -18,7 +18,7 @@
   sales = list(range(234, 234 + len(make)))
   write_arrays_to_parquet([make, year, sales], path / 'ford.parquet', names=['make', 'year', 'sales'], row_group_size=10)
 
-  car_data = ParquetBiglist.new(path)
+  car_data = ExternalBiglist.new(path, storage_format='parquet')
 
 .. testcleanup::
 
@@ -35,7 +35,7 @@ Reading Parquet files
 ---------------------
 
 The function :func:`read_parquet_file` is provided to read a single Parquet file independent of
-:class:`ParquetBiglist`. It returns a :class:`ParquetFileReader`. All the facilities of this class,
+:class:`ExternalBiglist`. It returns a :class:`ParquetFileReader`. All the facilities of this class,
 as demonstrated above, are ready for use:
 
 >>> [v.path for v in car_data.files]

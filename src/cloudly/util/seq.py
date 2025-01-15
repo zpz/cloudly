@@ -272,7 +272,7 @@ class Chain(Seq[Element]):
         >>> from cloudly.util.seq import Chain
         >>> numbers = list(range(10))
         >>> car_data  # doctest: +SKIP
-        <ParquetBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
+        <ExternalBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
         >>> combined = Chain(numbers, car_data)
         >>> combined[3]
         3

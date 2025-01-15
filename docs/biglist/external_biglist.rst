@@ -1,8 +1,8 @@
-**************
-ParquetBiglist
-**************
+***************
+ExternalBiglist
+***************
 
-Creating a ParquetBiglist
+Creating a ExternalBiglist
 =========================
 
 
@@ -10,7 +10,7 @@ Apache Parquet is a popular file format in the "big data" domain.
 Many tools save large amounts of data in this format, often in a large number of files,
 sometimes in nested directories.
 
-:class:`ParquetBiglist` takes such data files as pre-existing, read-only, external data,
+:class:`ExternalBiglist` takes such data files as pre-existing, read-only, external data,
 and provides an API to read the data in various ways.
 This is analogous to, for example, the "external table" concept in BigQuery.
 
@@ -37,10 +37,10 @@ Let's create a couple small Parquet files to demonstrate this API.
 Now we want to treat the contents of ``honda.parquet`` and ``ford.parquet`` combined as one dataset, and
 use ``biglist`` tools to read it.
 
->>> from cloudly.biglist import ParquetBiglist
->>> car_data = ParquetBiglist.new(path)
+>>> from cloudly.biglist import ExternalBiglist
+>>> car_data = ExternalBiglist.new(path, storage_format='parquet')
 >>> car_data  # doctest: +SKIP
-<ParquetBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
+<ExternalBiglist at '/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50' with 112 records in 2 data file(s) stored at ['/tmp/a/b/c/e']>
 >>> car_data.path  # doctest: +SKIP
 LocalUpath('/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50')
 >>> len(car_data)
@@ -50,26 +50,26 @@ LocalUpath('/tmp/edd9cefb-179b-46d2-8946-7dc8ae1bdc50')
 >>> list(car_data.files)
 [<ParquetFileReader for '/tmp/a/b/c/e/ford.parquet'>, <ParquetFileReader for '/tmp/a/b/c/e/honda.parquet'>]
 
-what :meth:`ParquetBiglist.new` does is to read the meta data of each file in the directory, recursively,
+what :meth:`ExternalBiglist.new` does is to read the meta data of each file in the directory, recursively,
 and save relevant info to facilitate its reading later.
-The location given by ``car_data.path`` is the directory where :class:`ParquetBiglist` saves its meta info,
+The location given by ``car_data.path`` is the directory where :class:`ExternalBiglist` saves its meta info,
 and not where the actual data are.
 As is the case with :class:`Biglist`, this directory is a temporary one, which will be deleted once the object
 ``car_data`` goes away. If we wanted to keep the directory for future use, we should have specified a location
-when calling :meth:`~ParquetBiglist.new`.
+when calling :meth:`~ExternalBiglist.new`.
 
 
-Reading a ParquetBiglist
-========================
+Reading an ExternalBiglist
+==========================
 
-The fundamental reading API is the same between :class:`Biglist` and :class:`ParquetBiglist`:
+The fundamental reading API is the same between :class:`Biglist` and :class:`ExternalBiglist`:
 random access, slicing/dicing using :class:`Slicer`, iteration,
-distributed reading via its :meth:`~ParquetBiglist.files`---these are all used the same way.
+distributed reading via its :meth:`~ExternalBiglist.files`---these are all used the same way.
 
-However, the structures of the data files are very different between :class:`Biglist` and :class:`ParquetBiglist`.
+However, the structures of the data files are very different between :class:`Biglist` and :class:`ExternalBiglist`.
 For Biglist, each data file contains a straight Python list, elements of which being whatever have been
 passed into :meth:`Biglist.append`.
-For ParquetBiglist, each data file is in a sophisticated columnar format, which is publicly documented.
+For ExternalBiglist, each data file is in a sophisticated columnar format, which is publicly documented.
 A variety of ways are provided to get data out of the Parquet format;
 some favor convenience, some others favor efficiency. Let's see some examples.
 
