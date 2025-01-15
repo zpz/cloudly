@@ -23,7 +23,7 @@ from boltons import iterutils
 
 from cloudly.biglist import (
     Biglist,
-    ParquetBiglist,
+    ExternalBiglist,
 )
 from cloudly.biglist.parquet import (
     read_parquet_file,
@@ -384,7 +384,9 @@ def test_parquet():
         assert len(bl) == len(data)
         print('num_data_files:', bl.num_data_files)
 
-        bl2 = ParquetBiglist.new(bl.data_path)
+        bl2 = ExternalBiglist.new(
+            bl.data_path, storage_format='parquet', datafile_ext='.parquet'
+        )
         try:
             assert len(bl2) == len(data)
             assert bl2.num_data_files == bl.num_data_files
@@ -552,7 +554,9 @@ def test_parquet_biglist(tmp_path):
         names=['key', 'value'],
     )
 
-    biglist = ParquetBiglist.new(path)
+    biglist = ExternalBiglist.new(
+        path, storage_format='parquet', datafile_ext='.parquet'
+    )
     try:
         assert len(biglist) == N + N
         assert len(biglist.files) == 2

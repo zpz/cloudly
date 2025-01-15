@@ -11,6 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - More tests.
 - New classes `cloudly.utpathlib.serializer.{NewlineDelimitedOrjsonSerializer, CsvSerializer, AvroSerializer}`; all are usable by "biglist".
 - `Biglist.new` gets a new parameter `datafile_ext` to specify the extension of the data files.
+- New class `cloudly.biglist.ExternalBiglist`, replacing the previous `ParquetBiglist`.
+- Removed some backcompat code in `cloudly.biglist` that was introduced in `biglist` versions 0.7.4--0.7.7 (2022-02 - 2023-03).
 
 
 ## [0.2.6] - 2025-01-05
