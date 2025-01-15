@@ -67,16 +67,16 @@ class BiglistBase(Seq[Element]):
     """
     This base class contains code mainly concerning *reading*.
     The subclass :class:`~biglist.Biglist` adds functionalities for writing.
-    Another subclass :class:`~biglist.ParquetBiglist` is read-only.
+    Another subclass :class:`~biglist.ExternalBiglist` is read-only.
     Here, "reading" and "read-only" is talking about the *data files*.
     This class always needs to write meta info *about* the data files.
     In addition, the subclass :class:`~biglist.Biglist` also creates and manages
-    the data files, whereas :class:`~biglist.ParquetBiglist` provides methods
+    the data files, whereas :class:`~biglist.ExternalBiglist` provides methods
     to read existing data files, treating them as read-only.
 
     This class is generic with a parameter indicating the type of the data items,
     but this is useful only for the subclass :class:`~biglist.Biglist`.
-    For the subclass :class:`~biglist.ParquetBiglist`, this parameter is essentially ``Any``
+    For the subclass :class:`~biglist.ExternalBiglist`, this parameter is essentially ``Any``
     because the data items (or rows) in Parquet files are composite and flexible.
     """
 
@@ -165,7 +165,7 @@ class BiglistBase(Seq[Element]):
             is called to determine a temporary path.
 
             The subclass :class:`~biglist.Biglist` saves both data and meta-info in this path.
-            The subclass :class:`~biglist.ParquetBiglist` saves meta-info only.
+            The subclass :class:`~biglist.ExternalBiglist` saves meta-info only.
 
         init_info
             Initial info that should be written into the *info* file before ``__init__`` is called.
