@@ -39,7 +39,7 @@ but also for any :class:`Seq`.
 __all__ = [
     'Biglist',
     'BiglistFileReader',
-    'ParquetBiglist',
+    'ExternalBiglist',
     'ParquetFileReader',
     'FileReader',
     'parquet',
@@ -53,10 +53,9 @@ from cloudly.util.seq import Chain, Slicer
 from . import parquet
 from ._biglist import (
     Biglist,
-    BiglistFileReader,
 )
-from ._parquet_biglist import (
-    ParquetBiglist,
+from ._external_biglist import (
+    ExternalBiglist,
     ParquetFileReader,
 )
-from ._util import FileReader
+from ._util import BiglistFileReader, FileReader

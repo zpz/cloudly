@@ -3,9 +3,9 @@ from __future__ import annotations
 import logging
 from abc import abstractmethod
 from collections.abc import Iterator
-from typing import TypeVar
+from typing import Any, Callable, TypeVar
 
-from cloudly.upathlib import Upath
+from cloudly.upathlib import PathType, Upath, resolve_path
 from cloudly.util.seq import Element, Seq
 
 logger = logging.getLogger(__name__)
@@ -147,3 +147,85 @@ class FileSeq(Seq[FileReaderType]):
         Note that this location does not need to be related to the location of the data files.
         """
         raise NotImplementedError
+
+
+class BiglistFileReader(FileReader[Element]):
+    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
+        """
+        Parameters
+        ----------
+        path
+            Path of a data file.
+        loader
+            A function that will be used to load the data file.
+            This must be pickle-able.
+            Usually this is the bound method ``load`` of  a subclass of :class:`cloudly.upathlib.Serializer`.
+            If you customize this, please see the doc of :class:`~biglist.FileReader`.
+        """
+        super().__init__()
+        self.path: Upath = resolve_path(path)
+        self.loader = loader
+        self._data: list | None = None
+
+    def __getstate__(self):
+        return self.path, self.loader
+
+    def __setstate__(self, data):
+        self.path, self.loader = data
+        self._data = None
+
+    def load(self) -> None:
+        if self._data is None:
+            self._data = self.loader(self.path)
+
+    def data(self) -> list[Element]:
+        """Return the data loaded from the file."""
+        self.load()
+        return self._data
+
+    def __len__(self) -> int:
+        return len(self.data())
+
+    def __getitem__(self, idx: int) -> Element:
+        return self.data()[idx]
+
+    def __iter__(self) -> Iterator[Element]:
+        return iter(self.data())
+
+
+class BiglistFileSeq(FileSeq[BiglistFileReader]):
+    def __init__(
+        self,
+        path: Upath,
+        data_files_info: list[tuple[str, int, int]],
+        file_loader: Callable[[Upath], Any],
+    ):
+        """
+        Parameters
+        ----------
+        path
+            Root directory for storage of meta info.
+        data_files_info
+            A list of data files that constitute the file sequence.
+            Each tuple in the list is comprised of a file path,
+            number of data items in the file, and cumulative
+            number of data items in the files up to the one at hand.
+            Therefore, the order of the files in the list is significant.
+        file_loader
+            Function that will be used to load a data file.
+        """
+        self._root_dir = path
+        self._data_files_info = data_files_info
+        self._file_loader = file_loader
+
+    @property
+    def path(self):
+        return self._root_dir
+
+    @property
+    def data_files_info(self):
+        return self._data_files_info
+
+    def __getitem__(self, idx: int):
+        file = self._data_files_info[idx][0]
+        return BiglistFileReader(file, self._file_loader)

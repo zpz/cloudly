@@ -5,6 +5,7 @@ import concurrent.futures
 import logging
 import os
 import queue
+import string
 import tempfile
 import threading
 import uuid
@@ -13,6 +14,15 @@ from abc import abstractmethod
 from collections.abc import Iterator
 
 from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path
+from cloudly.upathlib.serializer import (
+    AvroSerializer,
+    CsvSerializer,
+    NewlineDelimitedOrjsonSeriealizer,
+    ParquetSerializer,
+    PickleSerializer,
+    Serializer,
+    ZstdPickleSerializer,
+)
 from cloudly.util.seq import Element, Seq
 
 from ._util import FileReader, FileSeq
@@ -69,6 +79,51 @@ class BiglistBase(Seq[Element]):
     For the subclass :class:`~biglist.ParquetBiglist`, this parameter is essentially ``Any``
     because the data items (or rows) in Parquet files are composite and flexible.
     """
+
+    registered_storage_formats = {
+        'avro': AvroSerializer,
+        'pickle': PickleSerializer,
+        'pickle-zstd': ZstdPickleSerializer,
+        'parquet': ParquetSerializer,
+        'csv': CsvSerializer,
+        'newline-delimited-json': NewlineDelimitedOrjsonSeriealizer,
+    }
+
+    @classmethod
+    def register_storage_format(
+        cls,
+        name: str,
+        serializer: type[Serializer],
+    ) -> None:
+        """
+        Register a new serializer to handle data file dumping and loading.
+
+        This class has a few serializers registered out of the box.
+        They should be adequate for most applications.
+
+        Parameters
+        ----------
+        name
+            Name of the format to be associated with the new serializer.
+
+            After registering the new serializer with name "xyz", one can use
+            ``storage_format='xyz'`` in calls to :meth:`new`.
+            When reading the object back from persistence,
+            make sure this registry is also in place so that the correct
+            deserializer can be found.
+
+        serializer
+            A subclass of `cloudly.util.serializer.Serializer <https://github.com/zpz/cloudly/blob/main/src/cloudly/util/serializer.py>`_.
+
+            Although this class needs to provide the ``Serializer`` API, it is possible to write data files in text mode.
+            The registered 'csv' and 'newline-delimited-json' formats do that.
+        """
+        good = string.ascii_letters + string.digits + '-_'
+        assert all(n in good for n in name)
+        if name.replace('_', '-') in cls.registered_storage_formats:
+            raise ValueError(f"serializer '{name}' is already registered")
+        name = name.replace('_', '-')
+        cls.registered_storage_formats[name] = serializer
 
     @classmethod
     def get_temp_path(cls) -> Upath:

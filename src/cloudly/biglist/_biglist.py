@@ -5,88 +5,33 @@ import copy
 import functools
 import itertools
 import logging
-import os
-import string
 import threading
 import warnings
 from collections.abc import Iterable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Callable
 from uuid import uuid4
 
 import fastavro
 from typing_extensions import Self
 
-from cloudly.upathlib import PathType, Upath, resolve_path
+from cloudly.upathlib import PathType, Upath
 from cloudly.upathlib.serializer import (
-    AvroSerializer,
-    CsvSerializer,
-    NewlineDelimitedOrjsonSeriealizer,
-    ParquetSerializer,
-    PickleSerializer,
-    Serializer,
-    ZstdPickleSerializer,
     make_parquet_schema,
 )
 from cloudly.util.seq import Element
 
 from ._base import BiglistBase
 from ._util import (
-    FileReader,
-    FileSeq,
+    BiglistFileSeq,
 )
 
 logger = logging.getLogger(__name__)
 
 
 class Biglist(BiglistBase[Element]):
-    registered_storage_formats = {
-        'avro': AvroSerializer,
-        'pickle': PickleSerializer,
-        'pickle-zstd': ZstdPickleSerializer,
-        'parquet': ParquetSerializer,
-        'csv': CsvSerializer,
-        'newline-delimited-json': NewlineDelimitedOrjsonSeriealizer,
-    }
-
     DEFAULT_STORAGE_FORMAT = 'pickle-zstd'
-
-    @classmethod
-    def register_storage_format(
-        cls,
-        name: str,
-        serializer: type[Serializer],
-    ) -> None:
-        """
-        Register a new serializer to handle data file dumping and loading.
-
-        This class has a few serializers registered out of the box.
-        They should be adequate for most applications.
-
-        Parameters
-        ----------
-        name
-            Name of the format to be associated with the new serializer.
-
-            After registering the new serializer with name "xyz", one can use
-            ``storage_format='xyz'`` in calls to :meth:`new`.
-            When reading the object back from persistence,
-            make sure this registry is also in place so that the correct
-            deserializer can be found.
-
-        serializer
-            A subclass of `cloudly.util.serializer.Serializer <https://github.com/zpz/cloudly/blob/main/src/cloudly/util/serializer.py>`_.
-
-            Although this class needs to provide the ``Serializer`` API, it is possible to write data files in text mode.
-            The registered 'json' format does that.
-        """
-        good = string.ascii_letters + string.digits + '-_'
-        assert all(n in good for n in name)
-        if name.replace('_', '-') in cls.registered_storage_formats:
-            raise ValueError(f"serializer '{name}' is already registered")
-        name = name.replace('_', '-')
-        cls.registered_storage_formats[name] = serializer
 
     @classmethod
     def new(
@@ -260,92 +205,6 @@ class Biglist(BiglistBase[Element]):
             del kk['schema_spec']
             self._serialize_kwargs = kk
 
-        # For back compat.
-        if self.info.get('storage_version', 0) < 3:
-            # This is not called by ``new``, instead is opening an existing dataset.
-            # Usually these legacy datasets are in a "read-only" mode, i.e., you should
-            # not append more data to them. If you do, the back-compat code below
-            # may not be totally reliable if the dataset is being used by multiple workers
-            # concurrently.
-            if 'data_files_info' not in self.info:  # added in 0.7.4 (`biglist` version)
-                if self.storage_version == 0:
-                    # This may not be totally reliable in every scenario.
-                    # The older version had a parameter `lazy`, which is gone now.
-                    # After some time we may stop supporting this storage version. (7/27/2022)
-                    # However, as long as older datasets are in a "read-only" status,
-                    # this is fine.
-                    try:
-                        data_info_file = self.path / 'datafiles_info.json'
-                        data_files = data_info_file.read_json()
-                        # A list of tuples, (file_name, item_count)
-                    except FileNotFoundError:
-                        data_files = []
-                elif self.storage_version == 1:
-                    # Starting with storage_version 1, data file name is
-                    #   <timestamp>_<uuid>_<itemcount>.<ext>
-                    # <timestamp> contains a '.', no '_';
-                    # <uuid> contains '-', no '_';
-                    # <itemcount> contains no '-' nor '_';
-                    # <ext> may contain '_'.
-                    files0 = (v.name for v in self.data_path.iterdir())
-                    files1 = (v.split('_') + [v] for v in files0)
-                    files2 = (
-                        (float(v[0]), v[-1], int(v[2].partition('.')[0]))
-                        # timestamp, file name, item count
-                        for v in files1
-                    )
-                    files = sorted(files2)  # sort by timestamp
-
-                    if files:
-                        data_files = [
-                            (v[1], v[2]) for v in files
-                        ]  # file name, item count
-                    else:
-                        data_files = []
-                else:
-                    pass
-                    # `storage_version == 2 already has `data_files_info` in `self.info`,
-                    # but its format may be bad, hence it's included below.
-
-                if data_files:
-                    data_files_cumlength = list(
-                        itertools.accumulate(v[1] for v in data_files)
-                    )
-                    data_files_info = [
-                        (filename, count, cumcount)
-                        for (filename, count), cumcount in zip(
-                            data_files, data_files_cumlength
-                        )
-                    ]
-                    # Each element of the list is a tuple containing file name, item count in file, and cumsum of item counts.
-                else:
-                    data_files_info = []
-
-                self.info['data_files_info'] = data_files_info
-                with self._info_file.lock() as ff:
-                    ff.write_json(self.info, overwrite=True)
-
-            else:
-                # Added in 0.7.5: check for a bug introduced in 0.7.4. (`biglist` versions)
-                # Convert full path to file name.
-                # Version 0.7.4 was used very briefly, hence very few datasets
-                # were created by that version.
-                data_files_info = self.info['data_files_info']
-                if data_files_info:
-                    new_info = None
-                    if os.name == 'nt' and '\\' in data_files_info[0][0]:
-                        new_info = [
-                            (f[(f.rfind('\\') + 1) :], *_) for f, *_ in data_files_info
-                        ]
-                    elif '/' in data_files_info[0][0]:
-                        new_info = [
-                            (f[(f.rfind('/') + 1) :], *_) for f, *_ in data_files_info
-                        ]
-                    if new_info:
-                        self.info['data_files_info'] = new_info
-                        with self._info_file.lock() as ff:
-                            ff.write_json(self.info, overwrite=True)
-
         self._info_backup = copy.deepcopy(self.info)
 
     def __del__(self) -> None:
@@ -398,9 +257,6 @@ class Biglist(BiglistBase[Element]):
         that have been "flushed" to storage. Data items in the internal memory buffer
         are not counted. The buffer is empty upon calling :meth:`_flush` (internally and automatically)
         or :meth:`flush` (explicitly by user).
-
-        .. versionchanged:: 0.7.4
-            In previous versions, this count includes items that are not yet flushed.
         """
         self._warn_flush('__len__')
         return super().__len__()
@@ -412,9 +268,6 @@ class Biglist(BiglistBase[Element]):
         Items not yet "flushed" are not accessible by this method.
         They are considered "invisible" to this method.
         Similarly, negative ``idx`` operates in the range of flushed items only.
-
-        .. versionchanged:: 0.7.4
-            In previous versions, the accessible items include those that are not yet flushed.
         """
         return super().__getitem__(idx)
 
@@ -423,9 +276,6 @@ class Biglist(BiglistBase[Element]):
         Iterate over all the elements.
 
         Items that are not yet "flushed" are invisible to this iteration.
-
-        .. versionchanged:: 0.7.4
-            In previous versions, this iteration includes those items that are not yet flushed.
         """
         self._warn_flush('__iter__')
         return super().__iter__()
@@ -813,85 +663,3 @@ class Dumper:
                     except Exception as e:
                         errors.append((t._file, e))
                 return errors
-
-
-class BiglistFileReader(FileReader[Element]):
-    def __init__(self, path: PathType, loader: Callable[[Upath], Any]):
-        """
-        Parameters
-        ----------
-        path
-            Path of a data file.
-        loader
-            A function that will be used to load the data file.
-            This must be pickle-able.
-            Usually this is the bound method ``load`` of  a subclass of :class:`cloudly.upathlib.Serializer`.
-            If you customize this, please see the doc of :class:`~biglist.FileReader`.
-        """
-        super().__init__()
-        self.path: Upath = resolve_path(path)
-        self.loader = loader
-        self._data: list | None = None
-
-    def __getstate__(self):
-        return self.path, self.loader
-
-    def __setstate__(self, data):
-        self.path, self.loader = data
-        self._data = None
-
-    def load(self) -> None:
-        if self._data is None:
-            self._data = self.loader(self.path)
-
-    def data(self) -> list[Element]:
-        """Return the data loaded from the file."""
-        self.load()
-        return self._data
-
-    def __len__(self) -> int:
-        return len(self.data())
-
-    def __getitem__(self, idx: int) -> Element:
-        return self.data()[idx]
-
-    def __iter__(self) -> Iterator[Element]:
-        return iter(self.data())
-
-
-class BiglistFileSeq(FileSeq[BiglistFileReader]):
-    def __init__(
-        self,
-        path: Upath,
-        data_files_info: list[tuple[str, int, int]],
-        file_loader: Callable[[Upath], Any],
-    ):
-        """
-        Parameters
-        ----------
-        path
-            Root directory for storage of meta info.
-        data_files_info
-            A list of data files that constitute the file sequence.
-            Each tuple in the list is comprised of a file path,
-            number of data items in the file, and cumulative
-            number of data items in the files up to the one at hand.
-            Therefore, the order of the files in the list is significant.
-        file_loader
-            Function that will be used to load a data file.
-        """
-        self._root_dir = path
-        self._data_files_info = data_files_info
-        self._file_loader = file_loader
-
-    @property
-    def path(self):
-        return self._root_dir
-
-    @property
-    def data_files_info(self):
-        return self._data_files_info
-
-    def __getitem__(self, idx: int):
-        file = self._data_files_info[idx][0]
-        return BiglistFileReader(file, self._file_loader)
