@@ -82,7 +82,7 @@ The Seq protocol and FileReader class
 Before going further with Biglist, let's digress a bit and introduce a few helper facilities.
 
 :class:`BiglistBase`
-(and its subclasses :class:`Biglist` and :class:`ParquetBiglist`)
+(and its subclasses :class:`Biglist` and :class:`ExternalBiglist`)
 could have implemented the |Sequence|_ interface in the standard library.
 However, that interface contains a few methods that are potentially hugely inefficient for Biglist,
 and hence are not supposed to be used on a Biglist.
@@ -387,6 +387,6 @@ API reference
 .. autoclass:: cloudly.biglist.BiglistFileReader
 
 
-.. autoclass:: cloudly.biglist.ParquetBiglist
+.. autoclass:: cloudly.biglist.ExternalBiglist
 
 

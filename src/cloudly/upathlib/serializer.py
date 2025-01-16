@@ -557,8 +557,8 @@ class ParquetSerializer(Serializer):
         (A record read out may not be exactly equal to the original that was written, in that
         elements that were missing in a record when written may have been filled in with ``None``
         when read back out.)
-        In other words, the reading is *not* like that of :class:`~biglist.ParquetBiglist`.
-        You can always create a separate ParquetBiglist for the data files of the Biglist
+        In other words, the reading is *not* like that of :class:`~biglist.ExternalBiglist`.
+        You can always create a separate ExternalBiglist for the data files of the Biglist
         in order to use Parquet-style data reading. The data files are valid Parquet files.
 
         If neither ``schema`` nor ``schema_spec`` is specified, then the data schema is auto-inferred

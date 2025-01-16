@@ -4,7 +4,7 @@ that implement the :class:`Seq` interface (a simplified |Sequence|_) with the ca
 concurrent and distributed reading and writing.
 The main use case is *sequentially* processing large amounts of data that can not fit in memory.
 
-Currently, two kinds of "biglists" are provided, namely ``Biglist`` and ``ParquetBiglist``.
+Currently, two kinds of "biglists" are provided, namely ``Biglist`` and ``ExternalBiglist``.
 
 :class:`Biglist` manages writing and reading.
 Here, "writing" refers to adding data to this facility and be managed by it.
@@ -12,13 +12,13 @@ The class manages its data files in addition to meta info.
 Writing is append-only; updating existing data is not supported.
 Appending can be conducted by a number of distributed workers.
 
-:class:`ParquetBiglist` defines a kind of "external biglist". When given the paths to a set of
+:class:`ExternalBiglist` defines a kind of "external biglist". When given the paths to a set of
 pre-existing data files in the Apache Parquet format,
 this class provides a rich set of facilities for *reading* the data.
 (Potentially confusingly, ``Biglist`` can save data in Parquet format among others; that type of a ``Biglist``
-is *not* a ``ParquetBiglist``, which supports *reading* only.)
+is *not* a ``ExternalBiglist``, which supports *reading* only.)
 
-``Biglist`` and ``ParquetBiglist`` share the same core API for *reading*.
+``Biglist`` and ``ExternalBiglist`` share the same core API for *reading*.
 Although random element access is supported, it is not optimized
 and is not the target usage pattern. Random element access can be *very* inefficient.
 The intended way of data consumption is by iteration, which
@@ -28,7 +28,7 @@ Persistence can be on local disk or in cloud storage.
 Thanks to the module `cloudly.upathlib`,
 the implementation as wel as the end-user API is agnostic to the location of storage.
 
-In support of ``ParquetBiglist``, some utilities are provided for reading and writing Parquet data files.
+In support of ``ExternalBiglist``, some utilities are provided for reading and writing Parquet data files.
 These utilities are useful in their own right.
 
 Additional utilities provide mechanisms for "slicing and dicing" a biglist,

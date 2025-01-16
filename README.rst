@@ -7,6 +7,8 @@ Currently, the package includes two substantial components, namely ``cloudly.big
 Both had been separately developed for a few years prior to their merge into ``cloudly`` in December 2024. 
 At the time of the merge, both were battle-tested and fairly stable with very compelling use cases.
 
+Besides ``biglist`` and ``upathlib``, the subpackage ``cloudly.gcp`` is growing with utilities for Google Cloud Platform.
+
 Read the `documentation <https://cloudly.readthedocs.io/en/latest/>`_.
 
 Licence
