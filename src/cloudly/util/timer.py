@@ -79,7 +79,6 @@ class timer:
     def __exit__(self, *args, **kwargs):
         dur = friendly_duration(perf_counter() - self._t0)
         if self._name:
-            self._print_func(f'... "{self._name}" finished')
-            self._print_func(f'"{self._name}" took {dur} to finish')
+            self._print_func(f'... "{self._name}" finished after {dur}')
         else:
-            self._print_func(f'... took {dur}')
+            self._print_func(f'... finished after {dur}')
