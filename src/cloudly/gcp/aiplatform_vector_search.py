@@ -9,7 +9,9 @@ from google.cloud import aiplatform
 from google.cloud.aiplatform.compat.types.matching_engine_index import IndexDataPoint
 from google.cloud.aiplatform.matching_engine import (
     MatchingEngineIndex,
+    MatchingEngineIndexEndpoint,
 )
+from typing_extensions import Self
 
 from cloudly.upathlib.serializer import NewlineDelimitedOrjsonSeriealizer
 from cloudly.util.datetime import utcnow
@@ -19,6 +21,9 @@ from .storage import GcsBlobUpath
 
 
 def init_global_config(region: str = 'us-central-1'):
+    # Call this function once before using :class:`Index` and :class:`Endpoint`.
+    # The `project` and `region` used in this call will be used in other
+    # functions of this module where applicable.
     aiplatform.init(project=get_project_id(), location=region)
 
 
@@ -112,16 +117,14 @@ class Index:
             )
         return cls(index.resource_name)
 
-    def __init__(self, index_name: str):
-        self._index = MatchingEngineIndex(index_name)
+    def __init__(self, name: str):
+        self.index = MatchingEngineIndex(name)
+        self.name = name
 
-    @property
-    def index(self) -> MatchingEngineIndex:
-        return self._index
-
-    def upsert_datapoints(self, datapoints: Sequence[IndexDataPoint], **kwargs):
+    def upsert_datapoints(self, datapoints: Sequence[IndexDataPoint], **kwargs) -> Self:
         # "stream updating"
         self.index.upsert_datapoints(datapoints, **kwargs)
+        return self
 
     def batch_update_datapoints(
         self,
@@ -129,7 +132,7 @@ class Index:
         *,
         staging_folder: str,
         is_complete_overwrite: bool = None,
-    ) -> str:
+    ) -> Self:
         """
         Parameters
         ----------
@@ -148,7 +151,7 @@ class Index:
             The blob should not be directly under the bucket root, i.e. there should be one or more
             levels of "directory" between the bucket name and the blob.
 
-            The file will not be deleted after use.
+            The file will be deleted after successful use.
 
         Returns
         -------
@@ -166,11 +169,12 @@ class Index:
             contents_delta_uri=str(file.parent),
             is_complete_overwrite=is_complete_overwrite,
         )
-        return str(file)
+        file.parent.rmrf()
+        return self
 
     def batch_update_from_uri(
         self, uri: str, *, is_complete_overwrite: bool = None, **kwargs
-    ):
+    ) -> Self:
         # For function details, see `MatchingEngineIndex.update_embeddings`.
         # The expected structure and format of the files this URI points to is
         # described at
@@ -181,16 +185,121 @@ class Index:
             is_complete_overwrite=is_complete_overwrite,
             **kwargs,
         )
+        return self
 
-    def remove_datapoints(self, datapoint_ids: Sequence[str]):
+    def remove_datapoints(self, datapoint_ids: Sequence[str]) -> Self:
         self.index.remove_datapoints(datapoint_ids)
+        return self
 
 
 class Endpoint:
+    @classmethod
+    def new(
+        cls,
+        display_name: str,
+        *,
+        public_endpoint_enabled: bool = False,
+        labels: dict[str, str] | None = None,
+        **kwargs,
+    ):
+        endpoint = MatchingEngineIndexEndpoint.create(
+            display_name=display_name,
+            public_endpoint_enabled=public_endpoint_enabled,
+            labels=labels,
+            **kwargs,
+        )
+        return cls(endpoint.resource_name)
+
+    def __init__(self, name: str):
+        self.name = name
+        self.endpoint = MatchingEngineIndexEndpoint(name)
+
+    def deploy_index(
+        self,
+        index: Index,
+        *,
+        deployed_index_id: str | None = None,
+        display_name: str | None = None,
+        machine_type: str | None = None,
+        min_replica_count: int = 1,
+        max_replica_count: int | None = None,
+        **kwargs,
+    ) -> DeployedIndex:
+        """
+        Parameters
+        ----------
+        deployed_index_id
+            Up to 128 characters long and must start with a letter and only contain
+            letters, numbers, and underscores.
+
+            Must be unique within the project it is created in.
+
+            If missing, a value containing timestamp and some randomness will be used.
+        display_name
+            By default, `index.display_name` plus timestamp will be used.
+        machine_type
+            If missing, model is deployed with automatic resources.
+        max_replica_count
+            If missing, `min_replica_count * 2` is used.
+        """
+        if not deployed_index_id:
+            deployed_index_id = (
+                f"{utcnow().strftime('%Y%m%d_%H%M%S')}_{str(uuid4()).split('-')[0]}"
+            )
+        if not display_name:
+            display_name = (
+                f"{index.display_name} since {utcnow().strftime('%Y%m%d-%H%M%S')}"
+            )
+        if not max_replica_count:
+            max_replica_count = min_replica_count * 2
+        self.endpoint.deploy_index(
+            index.index,
+            deployed_index_id=deployed_index_id,
+            display_name=display_name,
+            machine_type=machine_type,
+            min_replica_count=min_replica_count,
+            max_replica_count=max_replica_count,
+            **kwargs,
+        )
+        return self.deployed_idx(deployed_index_id)
+
+    def undeploy_index(self, deployed_index_id: str):
+        self.endpoint.undeploy_index(deployed_index_id)
+
+    def undeploy_all(self):
+        self.endpoint.undeploy_all()
+
+    @property
+    def deployed_indexes(self):
+        return self.endpoint.deployed_indexes
+
+    def delete(self, force: bool = False):
+        """
+        Delete this endpoint.
+
+        If `force` is `True`, all indexes deployed on this endpoint will be undeployed first.
+        """
+        self.endpoint.delete(force=force)
+
+    def deployed_idx(self, deployed_index_id: str):
+        return DeployedIndex(self, deployed_index_id)
+
+
+class DeployedIndex:
     """
-    The class `Endpoint` is responsible for making queries to the `Index` (which has been
-    "deployed" at the endpoint).
+    The class `DeployedIndex` is responsible for making queries to an `Index` that has been deployed at an endpoint.
+    Instantiate a `DeployedIndex` object via `Endpoint.deploy_index` or `Endpoint.deployed_index`.
     """
 
-    def find_neighbors(self):
+    def __init__(self, endpoint: Endpoint, deployed_index_id: str):
+        self.endpoint = endpoint
+        self.deployed_index_id = deployed_index_id
+
+    def find_neighbors(
+        self,
+        *,
+        deployed_index_id: str,
+        embeddings: list[list[float]],
+        num_neighbors: int = 10,
+    ):
         pass
