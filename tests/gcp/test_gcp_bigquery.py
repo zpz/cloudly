@@ -133,30 +133,40 @@ def test_view():
     ]
     table = bigquery.Dataset('tmp').temp_table().load_from_json(data)
     try:
-#         view = bigquery.Dataset('tmp').view('old').drop_if_exists().create(f'''\
-# SELECT name
-# FROM `{table.qualified_table_id}`
-# WHERE age > 20
-# '''
-#         )
-#         try:
-#             assert sorted(row[0] for row in view.read_rows()) == ['Jessica', 'Peter', 'Tom']
-#             print('view.table_type', view.view.table_type)
-#         finally:
-#             view.drop()
+        #         view = bigquery.Dataset('tmp').view('old').drop_if_exists().create(f'''\
+        # SELECT name
+        # FROM `{table.qualified_table_id}`
+        # WHERE age > 20
+        # '''
+        #         )
+        #         try:
+        #             assert sorted(row[0] for row in view.read_rows()) == ['Jessica', 'Peter', 'Tom']
+        #             print('view.table_type', view.view.table_type)
+        #         finally:
+        #             view.drop()
 
-        view = bigquery.Dataset('tmp').view('old').drop_if_exists().create(f'''\
+        view = (
+            bigquery.Dataset('tmp')
+            .view('old')
+            .drop_if_exists()
+            .create(
+                f"""\
 SELECT name
 FROM `{table.qualified_table_id}`
 WHERE age > 20
-''',
-            materialized=True,
+""",
+                materialized=True,
+            )
         )
         assert view.count_rows() == 3
         assert view.view_id in bigquery.Dataset('tmp').list_views()
         try:
             print('view.table_type', view.view.table_type)
-            assert sorted(row[0] for row in view.read_rows()) == ['Jessica', 'Peter', 'Tom']
+            assert sorted(row[0] for row in view.read_rows()) == [
+                'Jessica',
+                'Peter',
+                'Tom',
+            ]
         finally:
             view.drop()
     finally:

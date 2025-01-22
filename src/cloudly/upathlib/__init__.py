@@ -36,6 +36,7 @@ __all__ = [
 from pathlib import Path
 
 from cloudly.util import serializer
+
 from . import versioned_uploadable
 from ._blob import BlobUpath
 from ._local import LocalPathType, LocalUpath

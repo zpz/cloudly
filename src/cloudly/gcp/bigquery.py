@@ -105,7 +105,9 @@ class Dataset:
 
     def list_views(self) -> list[str]:
         tables = get_client().list_tables(self.dataset)
-        return sorted(t.table_id for t in tables if t.table_type in ('VIEW', 'MATERIALIZED_VIEW'))
+        return sorted(
+            t.table_id for t in tables if t.table_type in ('VIEW', 'MATERIALIZED_VIEW')
+        )
 
     def table(self, table_id: str) -> Table:
         return Table(
@@ -628,7 +630,6 @@ class ExternalTable(_Table):
         return self
 
 
-
 class View(_Table):
     """
     Views are read-only.
@@ -636,16 +637,17 @@ class View(_Table):
     You can't use Storage API to read a view. The workaround would be to execute a query on the view, save the result in an
     (temporary) table, then read the table.
     """
+
     def __init__(self, view_id: str, dataset_id: str, projec_id: str = None):
         super().__init__(view_id, dataset_id, projec_id)
 
     def create(self, sql: str, *, materialized: bool = False):
-        '''
+        """
         `sql` is a "SELECT ..." statement that defines the view.
 
         If you create a materialized view, BQ will start populating it right away,
         which may continue for some time even after this function returns.
-        '''
+        """
         view = bigquery.Table(self.qualified_view_id)
         if materialized:
             view.mview_query = sql
@@ -654,11 +656,11 @@ class View(_Table):
         get_client().create_table(view, exists_ok=False)
         # If the view exists, `google.api_core.exceptions.Conflict` will be raised.
         return self
-    
+
     @property
     def qualified_view_id(self) -> str:
         return self.qualified_table_id
-    
+
     @property
     def view_id(self) -> str:
         return self.table_id
