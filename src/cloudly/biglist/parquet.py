@@ -20,7 +20,7 @@ from pyarrow.fs import FileSystem, GcsFileSystem
 from pyarrow.parquet import FileMetaData, ParquetFile
 
 from cloudly.upathlib import LocalUpath, PathType, Upath, resolve_path
-from cloudly.upathlib.serializer import make_parquet_schema
+from cloudly.util.serializer import make_parquet_schema
 
 try:
     from cloudly.gcp.auth import get_credentials

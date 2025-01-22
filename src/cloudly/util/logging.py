@@ -80,7 +80,7 @@ class DynamicFormatter(Formatter):
         if self._with_datetime:
             asctime = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(r.created))
             msecs = int((r.created % 1) * 10000)
-            fmt = f'{asctime}.{msecs} '
+            fmt = f'{asctime}.{msecs:0>4} '
             if self._with_timezone:
                 fmt += f'{self._tz} '
         else:

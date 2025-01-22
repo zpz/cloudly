@@ -121,3 +121,43 @@ def test_temp_table():
     tab.drop()
     path.rmrf()
     assert not tab3.exists()
+
+
+def test_view():
+    data = [
+        {'name': 'Tom', 'age': 38},
+        {'name': 'Peter', 'age': 61},
+        {'name': 'Jessica', 'age': 22},
+        {'name': 'Joe', 'age': 8},
+        {'name': 'John', 'age': 15},
+    ]
+    table = bigquery.Dataset('tmp').temp_table().load_from_json(data)
+    try:
+#         view = bigquery.Dataset('tmp').view('old').drop_if_exists().create(f'''\
+# SELECT name
+# FROM `{table.qualified_table_id}`
+# WHERE age > 20
+# '''
+#         )
+#         try:
+#             assert sorted(row[0] for row in view.read_rows()) == ['Jessica', 'Peter', 'Tom']
+#             print('view.table_type', view.view.table_type)
+#         finally:
+#             view.drop()
+
+        view = bigquery.Dataset('tmp').view('old').drop_if_exists().create(f'''\
+SELECT name
+FROM `{table.qualified_table_id}`
+WHERE age > 20
+''',
+            materialized=True,
+        )
+        assert view.count_rows() == 3
+        assert view.view_id in bigquery.Dataset('tmp').list_views()
+        try:
+            print('view.table_type', view.view.table_type)
+            assert sorted(row[0] for row in view.read_rows()) == ['Jessica', 'Peter', 'Tom']
+        finally:
+            view.drop()
+    finally:
+        table.drop()

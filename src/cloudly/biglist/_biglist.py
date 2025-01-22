@@ -17,7 +17,7 @@ import fastavro
 from typing_extensions import Self
 
 from cloudly.upathlib import PathType, Upath
-from cloudly.upathlib.serializer import (
+from cloudly.util.serializer import (
     make_parquet_schema,
 )
 from cloudly.util.seq import Element

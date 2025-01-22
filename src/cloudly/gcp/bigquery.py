@@ -103,6 +103,10 @@ class Dataset:
         tables = get_client().list_tables(self.dataset)
         return sorted(t.table_id for t in tables if t.table_type == 'EXTERNAL')
 
+    def list_views(self) -> list[str]:
+        tables = get_client().list_tables(self.dataset)
+        return sorted(t.table_id for t in tables if t.table_type in ('VIEW', 'MATERIALIZED_VIEW'))
+
     def table(self, table_id: str) -> Table:
         return Table(
             table_id=table_id, dataset_id=self.dataset_id, project_id=self.project_id
@@ -131,6 +135,9 @@ class Dataset:
         return ExternalTable(
             table_id=table_id, dataset_id=self.dataset_id, project_id=self.project_id
         )
+
+    def view(self, view_id: str) -> View:
+        return View(view_id, self.dataset_id, self.project_id)
 
 
 class _Table:
@@ -177,6 +184,7 @@ class _Table:
         return self
 
     def count_rows(self) -> int:
+        # This is accurate but may be expensive.
         sql = f'SELECT COUNT(*) FROM `{self.qualified_table_id}`'
         job = get_client().query(sql)
         return list(job.result())[0][0]
@@ -374,7 +382,10 @@ class Table(_Table):
         """
         job_config = _query_job_config(destination=self.qualified_table_id, **kwargs)
         job = get_client().query(sql, job_config=job_config)
-        return job.result() if wait else job
+        if wait:
+            job.result()
+            return self
+        return job
 
     def load_from_uri(
         self,
@@ -394,7 +405,10 @@ class Table(_Table):
         job = get_client().load_table_from_uri(
             uris, destination=self.qualified_table_id, job_config=job_config
         )
-        return job.result() if wait else job
+        if wait:
+            job.result()
+            return self
+        return job
 
     def load_from_json(
         self,
@@ -412,7 +426,10 @@ class Table(_Table):
         job = get_client().load_table_from_json(
             data, destination=self.qualified_table_id, job_config=job_config
         )
-        return job.result() if wait else job
+        if wait:
+            job.result()
+            return self
+        return job
 
     def insert_rows(
         self, data: Iterable[tuple] | Iterable[dict], **kwargs
@@ -609,3 +626,46 @@ class ExternalTable(_Table):
         get_client().create_table(table, exists_ok=False)
         # If the table exists, `google.api_core.exceptions.Conflict` will be raised.
         return self
+
+
+
+class View(_Table):
+    """
+    Views are read-only.
+
+    You can't use Storage API to read a view. The workaround would be to execute a query on the view, save the result in an
+    (temporary) table, then read the table.
+    """
+    def __init__(self, view_id: str, dataset_id: str, projec_id: str = None):
+        super().__init__(view_id, dataset_id, projec_id)
+
+    def create(self, sql: str, *, materialized: bool = False):
+        '''
+        `sql` is a "SELECT ..." statement that defines the view.
+
+        If you create a materialized view, BQ will start populating it right away,
+        which may continue for some time even after this function returns.
+        '''
+        view = bigquery.Table(self.qualified_view_id)
+        if materialized:
+            view.mview_query = sql
+        else:
+            view.view_query = sql
+        get_client().create_table(view, exists_ok=False)
+        # If the view exists, `google.api_core.exceptions.Conflict` will be raised.
+        return self
+    
+    @property
+    def qualified_view_id(self) -> str:
+        return self.qualified_table_id
+    
+    @property
+    def view_id(self) -> str:
+        return self.table_id
+
+    @property
+    def view(self) -> bigquery.Table:
+        return self.table
+
+    def read_rows(self):
+        raise NotImplementedError
