@@ -132,42 +132,73 @@ def test_view():
         {'name': 'John', 'age': 15},
     ]
     table = bigquery.Dataset('tmp').temp_table().load_from_json(data)
+    print(table.qualified_table_id)
     try:
-        #         view = bigquery.Dataset('tmp').view('old').drop_if_exists().create(f'''\
-        # SELECT name
-        # FROM `{table.qualified_table_id}`
-        # WHERE age > 20
-        # '''
-        #         )
-        #         try:
-        #             assert sorted(row[0] for row in view.read_rows()) == ['Jessica', 'Peter', 'Tom']
-        #             print('view.table_type', view.view.table_type)
-        #         finally:
-        #             view.drop()
-
-        view = (
-            bigquery.Dataset('tmp')
-            .view('old')
-            .drop_if_exists()
-            .create(
-                f"""\
-SELECT name
-FROM `{table.qualified_table_id}`
-WHERE age > 20
-""",
-                materialized=True,
+        for materialized in (False, True):
+            view = (
+                bigquery.Dataset('tmp')
+                .view('old')
+                .drop_if_exists()
+                .create(
+                    f"""\
+            SELECT name
+            FROM `{table.qualified_table_id}`
+            WHERE age > 20
+            """,
+                    materialized=materialized,
+                )
             )
+
+            try:
+                print(view.qualified_view_id)
+                assert view.view.table_type == (
+                    'MATERIALIZED_VIEW' if materialized else 'VIEW'
+                )
+                assert view.count_rows() == 3
+                assert view.view_id in bigquery.Dataset('tmp').list_views()
+                assert sorted(row[0] for row in view.read_rows()) == [
+                    'Jessica',
+                    'Peter',
+                    'Tom',
+                ]
+            finally:
+                view.drop()
+    finally:
+        table.drop()
+
+
+def test_external():
+    data = [
+        {'name': 'Tom', 'age': 38},
+        {'name': 'Peter', 'age': 61},
+        {'name': 'Jessica', 'age': 22},
+        {'name': 'Joe', 'age': 8},
+        {'name': 'John', 'age': 15},
+    ]
+    table = bigquery.Dataset('tmp').temp_table().load_from_json(data)
+    try:
+        path = GcsBlobUpath('/test/bq', bucket_name='zpz-tmp')
+        path.rmrf()
+        table.extract_to_uri(str(path / 'part-*.parquet'))
+
+        etable = (
+            bigquery.Dataset('tmp')
+            .external_table('abc')
+            .drop_if_exists()
+            .create(str(path / 'part-*.parquet'), source_format='PARQUET')
         )
-        assert view.count_rows() == 3
-        assert view.view_id in bigquery.Dataset('tmp').list_views()
         try:
-            print('view.table_type', view.view.table_type)
-            assert sorted(row[0] for row in view.read_rows()) == [
-                'Jessica',
-                'Peter',
-                'Tom',
+            assert etable.count_rows() == 5
+            rows = sorted(etable.read_rows(as_dict=True), key=lambda x: x['age'])
+            assert rows == [
+                {'name': 'Joe', 'age': 8},
+                {'name': 'John', 'age': 15},
+                {'name': 'Jessica', 'age': 22},
+                {'name': 'Tom', 'age': 38},
+                {'name': 'Peter', 'age': 61},
             ]
+
         finally:
-            view.drop()
+            etable.drop()
     finally:
         table.drop()

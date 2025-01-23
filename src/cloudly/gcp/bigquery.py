@@ -4,9 +4,15 @@ __all__ = [
     'get_client',
     'get_storage_client',
     'list_datasets',
+    'dataset',
+    'read',
+    'write',
     'read_streams',
     'Dataset',
     'Table',
+    'ExternalTable',
+    'View',
+    'ScalarFunction',
     'SchemaField',
 ]
 
@@ -49,7 +55,6 @@ def get_storage_client() -> bigquery_storage.BigQueryReadClient:
 
     # `client.transport.close()` is what `client.__exit__(...)` does.
     Finalize(client, client.transport.close)
-
     return client
 
 
@@ -59,14 +64,72 @@ def list_datasets(project_id: str = None) -> list[str]:
     return ids
 
 
+def dataset(dataset_id: str, project_id: str | None = None) -> Dataset:
+    """
+    Usually you get to a "table" via a "dataset", for example,
+
+    ::
+
+        from cloudly.gcp import bigquery
+
+        table = bigquery.dataset('tmp').table('abc').drop_if_exists().load_from_json(...)
+    """
+    return Dataset(dataset_id, project_id)
+
+
+def read(sql: str, *, as_dict: bool = False) -> Iterator:
+    """
+    This function executes a `SELECT ...` statement and iterates over the result rows.
+
+    BQ creates a temporary table to host the result of `query`.
+    The temporary table is in a temporary dataset (named with a leading underscore)
+    in the user's account.
+
+    This function is likely not suitable if the result set is huge.
+    For more control, you can put the result in a table under your own control, then access
+    the table however you like::
+
+        table = Dataset('tmp').temp_table().load_from_query(sql)
+
+    You can also get the BQ-created temporary table like this::
+
+        job = get_client().query(sql)
+        table = Table(job.destination.table_id, job.destination.dataset_id, job.destination.project)
+    """
+    job = get_client().query(sql)
+    # `job.destination` contains info about the resultant temporary table.
+
+    rows: bigquery.RowIterator = job.result()
+    if as_dict:
+        for row in rows:
+            yield dict(zip(row.keys(), row.values()))
+    else:
+        for row in rows:
+            yield row.values()
+
+
+def write(sql: str, *, wait: bool = True):
+    """
+    This function is used for SQL statements that do not have very interesting responses,
+    for example, creating a table using a complex statement.
+    Other than this, the distinction between "read" and "write" is largely superficial.
+    """
+    job = get_client().query(sql)
+    if wait:
+        return job.result()
+    return job
+
+
 def read_streams(stream_names: Iterable[str]) -> Iterator[ParquetBatchData]:
-    # The "Storage API" is used to pull data at high speed and throughput from a large table by
-    # concurrently pulling from "streams".
-    # The stream names are obtained by `Table.create_streams`.
-    # The stream names returned by `Table.create_streams` may be passed to multiple
-    # workers (threads, processes, machines) for concurrent and/or distributed consumption.
-    # This function shows how one worker can consume an iterable of stream names.
-    # User may need to adapt this code with additional setup.
+    """
+    The "Storage API" is used to pull data at high speed and throughput from a large table by
+    concurrently pulling from "streams".
+    The stream names are obtained by `Table.create_streams`.
+    The stream names returned by `Table.create_streams` may be passed to multiple
+    workers (threads, processes, machines) for concurrent and/or distributed consumption.
+    This function shows how one worker can consume an iterable of stream names.
+    User may need to adapt this code with additional setup.
+    """
     client = get_storage_client()
     for stream_name in stream_names:
         logger.debug("pulling data from stream '%s'", stream_name)
@@ -81,13 +144,29 @@ def read_streams(stream_names: Iterable[str]) -> Iterator[ParquetBatchData]:
 class Dataset:
     """
     We do not provide functions for dataset management (create, delete, etc)
-    because it's unlikely that a project need dynamic datasets.
+    because it's unlikely that a project needs dynamic datasets.
     For dataset management, just go to GCP dashboard.
     """
 
     def __init__(self, dataset_id: str, project_id: str = None):
         self.dataset_id = dataset_id
         self.project_id = project_id or get_project_id()
+
+    @property
+    def qualified_dataset_id(self) -> str:
+        return f'{self.project_id}.{self.dataset_id}'
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}('{self.qualified_dataset_id}')"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
+    def __getstate__(self):
+        return self.dataset_id, self.project_id
+
+    def __setstate__(self, data):
+        self.dataset_id, self.project_id = data
 
     @property
     def dataset(self) -> bigquery.Dataset:
@@ -109,6 +188,10 @@ class Dataset:
             t.table_id for t in tables if t.table_type in ('VIEW', 'MATERIALIZED_VIEW')
         )
 
+    def list_scalar_functions(self) -> list[str]:
+        routines = get_client().list_routines(self.dataset_id)
+        return sorted(r.routine_id for r in routines if r.type_ == 'SCALAR_FUNCTION')
+
     def table(self, table_id: str) -> Table:
         return Table(
             table_id=table_id, dataset_id=self.dataset_id, project_id=self.project_id
@@ -119,7 +202,7 @@ class Dataset:
         It's recommended to create a dataset named 'tmp' in your account and configure
         an expiration time for its tables. Then use this dataset for temp tables.
 
-        Each BQ query saves its results in a (temporary by default) table.
+        Each BQ query saves its results in a temporary table.
         You can put the results in a table under your control (instead of letting
         BQ decide), and then use the reading methods of the table to get the results,
         like this::
@@ -141,10 +224,14 @@ class Dataset:
     def view(self, view_id: str) -> View:
         return View(view_id, self.dataset_id, self.project_id)
 
+    def scalar_function(self, routine_id: str) -> ScalarFunction:
+        return ScalarFunction(routine_id, self.dataset_id, self.project_id)
+
 
 class _Table:
     """
-    This class contains functionalities that are common to "native tables" and "external tables".
+    This class contains functionalities that are common to all types of BQ tables, namely,
+    "regular" tables, external tables, and views.
     """
 
     def __init__(self, table_id: str, dataset_id: str, project_id: str = None):
@@ -154,6 +241,10 @@ class _Table:
 
     @property
     def qualified_table_id(self) -> str:
+        """
+        When using this table ID in SQL statements, you often want to enclose that
+        between backticks (i.e. f"`{table.qualified_table_id}`").
+        """
         return f'{self.project_id}.{self.dataset_id}.{self.table_id}'
 
     def __repr__(self):
@@ -190,77 +281,6 @@ class _Table:
         sql = f'SELECT COUNT(*) FROM `{self.qualified_table_id}`'
         job = get_client().query(sql)
         return list(job.result())[0][0]
-
-    def read_rows(
-        self,
-        *,
-        as_dict: bool = False,
-        selected_fields: Sequence[str] | None = None,
-        max_results: int | None = None,
-        start_index: int | None = None,
-        page_size: int | None = None,
-        **kwargs,
-    ) -> Iterator:
-        """
-        This is used to read a small-ish table. For large tables, see :meth:`Table.create_streams`
-        and related functions.
-
-        Parameters
-        ----------
-        selected_fields
-            Fields to return. If specified, and if `as_dict` is `False` (so that each row is returned as a tuple),
-            the order of these fields is derived from the table schema. Their order in this input list is ignored.
-        max_results
-            Max number of rows to retrieve.
-        start_index
-            Used together, `start_index` and `max_results` specify the exact chunk of rows to retrieve.
-        """
-        if selected_fields:
-            schema = self.table.schema
-            # Ensure the selected columns are listed in the order as they appear
-            # in the table schema.
-            selected_fields = [s for s in schema if s.name in selected_fields]
-        rows = get_client().list_rows(
-            self.qualified_table_id,
-            selected_fields=selected_fields,
-            max_results=max_results,
-            start_index=start_index,
-            page_size=page_size,
-            **kwargs,
-        )
-        if as_dict:
-            for row in rows:
-                yield dict(zip(row.keys(), row.values()))
-        else:
-            for row in rows:
-                yield row.values()
-
-    def extract_to_uri(
-        self,
-        dest_uris: str | Sequence[str],
-        *,
-        destination_format: str = 'PARQUET',
-        compression: str = 'snappy',
-        wait: bool = True,
-        **kwargs,
-    ):
-        """
-        Usually, you should specify a location in Google Cloud Storage that is empty (hence it acts like a "folder").
-        You can specify individual blob name(s) like "gs://mybucket/myproject/myfolder/mydata.parquet" or specify a pattern
-        like "gs://mybucket/myproject/myfolder/part-*.parquet".
-        """
-        if isinstance(dest_uris, str):
-            dest_uris = [dest_uris]
-
-        job_config = bigquery.ExtractJobConfig(
-            destination_format=destination_format, compression=compression, **kwargs
-        )
-        job = get_client().extract_table(
-            self.qualified_table_id,
-            dest_uris,
-            job_config=job_config,
-        )
-        return job.result() if wait else job
 
 
 def _load_job_config(
@@ -332,7 +352,7 @@ class Table(_Table):
     The `load_*` methods by default will populate a new (or empty) table, typically auto-detecting the schema.
     There are options to make them append to an existing table.
 
-    Some method require the table to not yet exist in BQ. For example, :meth:`create`.
+    Some methods require the table to not yet exist in BQ. For example, :meth:`create`.
 
     Some methods require the table to exist, for example, `insert_rows` and the data-reading methods.
     """
@@ -350,10 +370,10 @@ class Table(_Table):
         exist in BQ. If the table already exists, an exception will be raised.
 
         This method only supports simple table definition. For more flexibility,
-        use `get_client().query(...)` with the raw SQL statement for table creation.
+        use `cloudly.gcp.bigquery.write(...)` with the raw SQL statement for table creation.
 
         If a table is deleted and then created again, it may not be accessible right away
-        (getting `NotFound` error), because of "eventual consistency".
+        (getting `NotFound` error), due to "eventual consistency".
 
         Parameters
         ----------
@@ -402,6 +422,8 @@ class Table(_Table):
 
         `uris` are data files in Google Cloud Storage, formatted like "gs://<bucket_name>/<object_name_or_glob>".
         It can contain patterns like "gs://mybucket/myproject/myfolder/*.parquet".
+
+        The source data storage is not required to be in the same region as the current table.
         """
         job_config = _load_job_config(source_format=source_format, **kwargs)
         job = get_client().load_table_from_uri(
@@ -460,6 +482,50 @@ class Table(_Table):
             ):
                 return None
             raise
+
+    def read_rows(
+        self,
+        *,
+        as_dict: bool = False,
+        selected_fields: Sequence[str] | None = None,
+        max_results: int | None = None,
+        start_index: int | None = None,
+        page_size: int | None = None,
+        **kwargs,
+    ) -> Iterator:
+        """
+        This is used to read a small-ish table. For large tables, see :meth:`Table.create_streams`
+        and related functions.
+
+        Parameters
+        ----------
+        selected_fields
+            Fields to return. If specified, and if `as_dict` is `False` (so that each row is returned as a tuple),
+            the order of these fields is derived from the table schema. Their order in this input list is ignored.
+        max_results
+            Max number of rows to retrieve.
+        start_index
+            Used together, `start_index` and `max_results` specify the exact chunk of rows to retrieve.
+        """
+        if selected_fields:
+            schema = self.table.schema
+            # Ensure the selected columns are listed in the order as they appear
+            # in the table schema.
+            selected_fields = [s for s in schema if s.name in selected_fields]
+        rows = get_client().list_rows(
+            self.qualified_table_id,
+            selected_fields=selected_fields,
+            max_results=max_results,
+            start_index=start_index,
+            page_size=page_size,
+            **kwargs,
+        )
+        if as_dict:
+            for row in rows:
+                yield dict(zip(row.keys(), row.values()))
+        else:
+            for row in rows:
+                yield row.values()
 
     def create_streams(
         self,
@@ -581,6 +647,35 @@ class Table(_Table):
                     for row in batch:
                         yield tuple(row.values())
 
+    def extract_to_uri(
+        self,
+        dest_uris: str | Sequence[str],
+        *,
+        destination_format: str = 'PARQUET',
+        compression: str = 'snappy',
+        wait: bool = True,
+        **kwargs,
+    ):
+        """
+        Usually, you should specify a location in Google Cloud Storage that is empty (hence it acts like a "folder").
+        You can specify individual blob name(s) like "gs://mybucket/myproject/myfolder/mydata.parquet" or specify a pattern
+        like "gs://mybucket/myproject/myfolder/part-*.parquet".
+
+        The destination storage is not required to be in the same region as the source table.
+        """
+        if isinstance(dest_uris, str):
+            dest_uris = [dest_uris]
+
+        job_config = bigquery.ExtractJobConfig(
+            destination_format=destination_format, compression=compression, **kwargs
+        )
+        job = get_client().extract_table(
+            self.qualified_table_id,
+            dest_uris,
+            job_config=job_config,
+        )
+        return job.result() if wait else job
+
 
 class ExternalTable(_Table):
     def create(
@@ -590,7 +685,7 @@ class ExternalTable(_Table):
         source_format: Literal['AVRO', 'CSV', 'ORC', 'PARQUET'] = 'PARQUET',
         schema: Sequence[SchemaField] | None = None,
         options=None,
-    ):
+    ) -> Self:
         """
         Parameters
         ----------
@@ -599,11 +694,13 @@ class ExternalTable(_Table):
         options
             Additional options to go with `source_format`.
 
+        The source data and the created external table need to reside in the same "region" (like "us-west1").
+
         For more flexible table definitions, use `get_client().query(...)` with raw SQL statements.
         """
         if isinstance(source_uris, str):
             source_uris = [source_uris]
-        config = bigquery.ExternalTable(source_format)
+        config = bigquery.ExternalConfig(source_format)
         config.source_uris = source_uris
         config.autodetect = schema is None
         if schema is not None:
@@ -629,19 +726,28 @@ class ExternalTable(_Table):
         # If the table exists, `google.api_core.exceptions.Conflict` will be raised.
         return self
 
+    def read_rows(
+        self,
+        *,
+        as_dict: bool = False,
+    ) -> Iterator:
+        # This method is likely not suitable if the result set is huge.
+        sql = f'SELECT * FROM `{self.qualified_table_id}`'
+        yield from read(sql, as_dict=as_dict)
+
 
 class View(_Table):
     """
     Views are read-only.
 
-    You can't use Storage API to read a view. The workaround would be to execute a query on the view, save the result in an
-    (temporary) table, then read the table.
+    You can't use Storage API to read a view. The workaround would be to execute a query on the view,
+    save the result in a (temporary) table, then read the table.
     """
 
     def __init__(self, view_id: str, dataset_id: str, projec_id: str = None):
         super().__init__(view_id, dataset_id, projec_id)
 
-    def create(self, sql: str, *, materialized: bool = False):
+    def create(self, sql: str, *, materialized: bool = False) -> Self:
         """
         `sql` is a "SELECT ..." statement that defines the view.
 
@@ -668,6 +774,141 @@ class View(_Table):
     @property
     def view(self) -> bigquery.Table:
         return self.table
+        # `self.view.table_type` is either 'VIEW' or 'MATERIALIZED_VIEW'.
 
-    def read_rows(self):
-        raise NotImplementedError
+    def read_rows(
+        self,
+        *,
+        as_dict: bool = False,
+    ) -> Iterator:
+        # This method is likely not suitable if the result set is huge.
+        sql = f'SELECT * FROM `{self.qualified_view_id}`'
+        yield from read(sql, as_dict=as_dict)
+
+
+class _Routine:
+    """
+    Common functionalities for all types of BQ routines, namely "scalar functions"
+    and "table functions".
+    """
+
+    @classmethod
+    def routine_data_type(
+        cls, data_type: str, element_type: str | None = None
+    ) -> bigquery.StandardSqlDataType:
+        """
+        `data_type`, like "STRING", "FLOAT16". See `bigquery.enums.StandardSqlTypeNames`.
+        `element_type`: data_type of elements when `data_type` is `ARRAY`.
+        """
+        type_kind = getattr(bigquery.StandardSqlTypeNames, data_type.upper())
+        if element_type:
+            assert data_type.upper() == 'ARRAY'
+            array_element_type = cls.routine_data_type(element_type)
+            return bigquery.StandardSqlDataType(
+                type_kind, array_element_type=array_element_type
+            )
+        else:
+            assert data_type.upper() != 'ARRAY'
+            return bigquery.StandardSqlDataType(type_kind)
+
+    @classmethod
+    def routine_input_argument(
+        cls, name: str, data_type: str, *, kind: str = 'FIXED_TYPE', **kwargs
+    ):
+        return bigquery.RoutineArgument(
+            name=name,
+            data_type=cls.routine_data_type(data_type, **kwargs),
+            kind=kind,
+        )
+
+    def __init__(self, routine_id: str, dataset_id: str, project_id: str | None = None):
+        self.routine_id = routine_id
+        self.dataset_id = dataset_id
+        self.project_id = project_id or get_project_id()
+
+    @property
+    def qualified_routine_id(self) -> str:
+        return f'{self.project_id}.{self.dataset_id}.{self.routine_id}'
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}('{self.qualified_routine_id}')"
+
+    def __str__(self) -> str:
+        return self.__repr__()
+
+    def __getstate__(self):
+        return self.routine_id, self.dataset_id, self.project_id
+
+    def __setstate__(self, data):
+        self.routine_id, self.dataset_id, self.project_id = data
+
+    @property
+    def routine(self) -> bigquery.Routine:
+        return get_client().get_routine(self.qualified_routine_id)
+
+    def exists(self) -> bool:
+        try:
+            _ = self.routine
+            return True
+        except google.api_core.exceptions.NotFound:
+            return False
+
+    def drop(self, *, not_found_ok: bool = False) -> Self:
+        get_client().delete_routine(
+            self.qualified_routine_id, not_found_ok=not_found_ok
+        )
+        # May raise `google.api_core.exceptions.NotFound`.
+        return self
+
+    def drop_if_exists(self) -> Self:
+        self.drop(not_found_ok=True)
+        return self
+
+
+class ScalarFunction(_Routine):
+    """
+    This is commonly referred to as "user-defined function" or UDF.
+
+    A main motivation for this class is the use case where the UDF code
+    is assembled in Python code for consistency with other pars of the code,
+    for example, the JS function code may plug in certain constants.
+    """
+
+    def create(
+        self,
+        *,
+        arguments: Sequence[bigquery.RoutineArgument],
+        imported_libraries: Sequence[str] | None = None,
+        body: str,
+        return_type: str,
+        language: Literal['SQL', 'JAVASCRIPT'],
+        description: str | None = None,
+    ) -> Self:
+        """
+        Parameters
+        ----------
+        arguments
+            Each argument may be created by :meth:`_Routine.routine_input_argument`.
+
+            If the routine takes no arg, pass in an empty list.
+        body
+            The Javascript function code as a string.
+        return_type
+            If this is not provided, the return type will be inferred at query time.
+        imported_libraries
+            A list of str paths to external libraries stored in Google Cloud Storage, e.g.,
+            `['gs://bq_js_udfs/lib1.js', 'gs://bq_js_udfs/lib2.js']`.
+        """
+        routine = bigquery.routine.Routine(
+            self.qualified_routine_id,
+            type_=bigquery.routine.RoutineType.SCALAR_FUNCTION,
+            language=language.upper(),
+            arguments=arguments,
+            imported_libraries=imported_libraries,
+            return_type=self.routine_data_type(return_type),
+            body=body,
+            description=description,
+        )
+        get_client().create_routine(routine, exists_ok=False)
+        # If the routine exists, will raise `Conflict`.
+        return self
