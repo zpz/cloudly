@@ -2,18 +2,17 @@ from __future__ import annotations
 
 __all__ = [
     'get_client',
-    'get_storage_client',
     'list_datasets',
     'dataset',
+    'query',
     'read',
-    'write',
     'read_streams',
+    'Job',
     'Dataset',
     'Table',
     'ExternalTable',
     'View',
     'ScalarFunction',
-    'SchemaField',
 ]
 
 
@@ -77,28 +76,33 @@ def dataset(dataset_id: str, project_id: str | None = None) -> Dataset:
     return Dataset(dataset_id, project_id)
 
 
-def read(sql: str, *, as_dict: bool = False) -> Iterator:
+def query(sql: str, *, wait: bool = True, **kwargs):
+    job = Job(get_client().query(sql, **kwargs))
+    if wait:
+        return job.result()
+    return job
+
+
+def read(sql: str, *, as_dict: bool = False, **kwargs) -> Iterator | Table:
     """
     This function executes a `SELECT ...` statement and iterates over the result rows.
 
-    BQ creates a temporary table to host the result of `query`.
+    In general, BQ creates a temporary table to host the result of `query`.
     The temporary table is in a temporary dataset (named with a leading underscore)
     in the user's account.
 
-    This function is likely not suitable if the result set is huge.
-    For more control, you can put the result in a table under your own control, then access
+    By default, this function returns an iterator over the rows of the result table.
+
+    If you need more control, you can get the table object as follows::
+
+        table = query(sql, wait=False).table
+
+    Further, you may put the result in a table under your own control, then access
     the table however you like::
 
         table = Dataset('tmp').temp_table().load_from_query(sql)
-
-    You can also get the BQ-created temporary table like this::
-
-        job = get_client().query(sql)
-        table = Table(job.destination.table_id, job.destination.dataset_id, job.destination.project)
     """
-    job = get_client().query(sql)
-    # `job.destination` contains info about the resultant temporary table.
-
+    job = Job(get_client().query(sql, **kwargs))
     rows: bigquery.RowIterator = job.result()
     if as_dict:
         for row in rows:
@@ -106,18 +110,6 @@ def read(sql: str, *, as_dict: bool = False) -> Iterator:
     else:
         for row in rows:
             yield row.values()
-
-
-def write(sql: str, *, wait: bool = True):
-    """
-    This function is used for SQL statements that do not have very interesting responses,
-    for example, creating a table using a complex statement.
-    Other than this, the distinction between "read" and "write" is largely superficial.
-    """
-    job = get_client().query(sql)
-    if wait:
-        return job.result()
-    return job
 
 
 def read_streams(stream_names: Iterable[str]) -> Iterator[ParquetBatchData]:
@@ -139,6 +131,48 @@ def read_streams(stream_names: Iterable[str]) -> Iterator[ParquetBatchData]:
             yield ParquetBatchData(page.to_arrow())
             npages += 1
         logger.debug("pulled data from stream '%s' with %d pages", stream_name, npages)
+
+
+class Job:
+    def __init__(self, job: bigquery.QueryJob | bigquery.LoadJob):
+        self._job = job
+        self.job_id = job.job_id
+
+    @property
+    def job(self):
+        return get_client.get_job(self.job_id)
+
+    @property
+    def destination(self):
+        # `job.destination` contains info about the resultant temporary table.
+        return self._job.destination
+
+    @property
+    def table(self) -> Table:
+        dest = self.destination
+        return Table(
+            dest.table_id,
+            dest.dataset_id,
+            dest.project,
+        )
+
+    @property
+    def state(self) -> str:
+        # 'RUNNING', etc
+        return self.job.state
+
+    def result(self):
+        # This will wait for the job to complete.
+        z = self._job.result()
+        # A possible customization is to alert on high cost here.
+        return z
+
+    @property
+    def slot_hours(self) -> float:
+        # I guess this is available only after the job has finished, e.g. after
+        # `self._job.result()` has been called.
+        return self._job.slot_millis / 1000 / 60 / 60
+        # Cost is `slot_hours * 0.02`.
 
 
 class Dataset:
@@ -279,8 +313,7 @@ class _Table:
     def count_rows(self) -> int:
         # This is accurate but may be expensive.
         sql = f'SELECT COUNT(*) FROM `{self.qualified_table_id}`'
-        job = get_client().query(sql)
-        return list(job.result())[0][0]
+        return list(read(sql))[0][0]
 
 
 def _load_job_config(
@@ -370,7 +403,7 @@ class Table(_Table):
         exist in BQ. If the table already exists, an exception will be raised.
 
         This method only supports simple table definition. For more flexibility,
-        use `cloudly.gcp.bigquery.write(...)` with the raw SQL statement for table creation.
+        use `cloudly.gcp.bigquery.query(...)` with the raw SQL statement for table creation.
 
         If a table is deleted and then created again, it may not be accessible right away
         (getting `NotFound` error), due to "eventual consistency".
@@ -403,11 +436,10 @@ class Table(_Table):
         Load the result of the query `sql` into the current table.
         """
         job_config = _query_job_config(destination=self.qualified_table_id, **kwargs)
-        job = get_client().query(sql, job_config=job_config)
+        z = query(sql, job_config=job_config, wait=wait)
         if wait:
-            job.result()
             return self
-        return job
+        return z
 
     def load_from_uri(
         self,
@@ -471,7 +503,7 @@ class Table(_Table):
         #     SELECT partition_id
         #     FROM `{self.project_id}.{self.dataset_id}.INFORMATION_SCHEMA.PARTITIONS`
         #     WHERE table_name = '{self.table_id}'"""
-        # zz = get_client().query(sql).result()
+        # zz = read(sql)
         # return [z[0] for z in zz]
         try:
             return sorted(get_client().list_partitions(self.qualified_table_id))
@@ -696,7 +728,7 @@ class ExternalTable(_Table):
 
         The source data and the created external table need to reside in the same "region" (like "us-west1").
 
-        For more flexible table definitions, use `get_client().query(...)` with raw SQL statements.
+        For more flexible table definitions, use `query(...)` with raw SQL statements.
         """
         if isinstance(source_uris, str):
             source_uris = [source_uris]
