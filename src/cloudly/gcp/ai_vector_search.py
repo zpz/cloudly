@@ -1,12 +1,20 @@
 from __future__ import annotations
 
+__all__ = [
+    'init_global_config',
+    'make_datapoint',
+    'make_batch_update_record',
+    'Index',
+    'Endpoint',
+    'DeployedIndex',
+]
+
 import warnings
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from google.cloud import aiplatform
-from google.cloud.aiplatform.compat.types.matching_engine_index import IndexDataPoint
 from google.cloud.aiplatform.matching_engine import (
     MatchingEngineIndex,
     MatchingEngineIndexEndpoint,
@@ -19,17 +27,23 @@ from cloudly.util.datetime import utcnow
 from .auth import get_project_id
 from .storage import GcsBlobUpath
 
+IndexDatapoint = aiplatform.compat.types.matching_engine_index.IndexDatapoint
 
-def init_global_config(region: str = 'us-central-1'):
-    # Call this function once before using :class:`Index` and :class:`Endpoint`.
-    # The `project` and `region` used in this call will be used in other
-    # functions of this module where applicable.
+
+def init_global_config(region: str):
+    """
+    Call this function once before using :class:`Index` and :class:`Endpoint`.
+    The `project` and `region` used in this call will be used in other
+    functions of this module where applicable.
+
+    `region` is like 'us-west1'.
+    """
     aiplatform.init(project=get_project_id(), location=region)
 
 
 def make_datapoint(
     id_: str, embedding: list[float], properties: dict[str, Any] | None = None
-) -> IndexDataPoint:
+) -> IndexDatapoint:
     # TODO: look for a more suitable name for `properties`.
     restricts = []
     numeric_restricts = []
@@ -39,15 +53,15 @@ def make_datapoint(
             assert isinstance(namespace, str)
             if isinstance(value, str):
                 restricts.append(
-                    IndexDataPoint.Restriction(namespace=namespace, allow_list=[value])
+                    IndexDatapoint.Restriction(namespace=namespace, allow_list=[value])
                 )
             elif isinstance(value, list) and all(isinstance(v, str) for v in value):
                 restricts.append(
-                    IndexDataPoint.Restriction(namespace=namespace, allow_list=value)
+                    IndexDatapoint.Restriction(namespace=namespace, allow_list=value)
                 )
             elif isinstance(value, (int, float)):
                 numeric_restricts.append(
-                    IndexDataPoint.NumericRestriction(
+                    IndexDatapoint.NumericRestriction(
                         namespace=namespace,
                         value_float=value,
                     )
@@ -58,7 +72,7 @@ def make_datapoint(
             warnings.warn(
                 f"some values in fields '{ignored_fields}' are not usable and skipped"
             )
-    return IndexDataPoint(
+    return IndexDatapoint(
         datapoint_id=id_,
         feature_vector=embedding,
         restricts=restricts,
@@ -66,7 +80,7 @@ def make_datapoint(
     )
 
 
-def make_batch_update_record(datapoint: IndexDataPoint) -> dict:
+def make_batch_update_record(datapoint: IndexDatapoint) -> dict:
     return {
         'id': datapoint.datapoint_id,
         'embedding': [component for component in datapoint.feature_vector],
@@ -98,6 +112,7 @@ class Index:
         dimensions: int,
         brute_force: bool = False,
         approximate_neighbors_count: int | None = None,
+        index_update_method: Literal['STREAM_UPDATE', 'BATCH_UPDATE'] = 'BATCH_UPDATE',
         **kwargs,
     ) -> Index:
         if not brute_force:
@@ -106,6 +121,7 @@ class Index:
                 display_name=display_name,
                 dimensions=dimensions,
                 approximate_neighbors_count=approximate_neighbors_count,
+                index_update_method=index_update_method,
                 **kwargs,
             )
         else:
@@ -113,27 +129,37 @@ class Index:
             index = MatchingEngineIndex.create_brute_force_index(
                 display_name=display_name,
                 dimensions=dimensions,
+                index_update_method=index_update_method,
                 **kwargs,
             )
         return cls(index.resource_name)
 
     def __init__(self, name: str):
+        """
+        `name` is like 'projects/166..../locations/us-west1/indexes/1234567890
+        """
         self.index = MatchingEngineIndex(name)
         self.name = name
 
-    def upsert_datapoints(self, datapoints: Sequence[IndexDataPoint], **kwargs) -> Self:
-        # "stream updating"
+    def upsert_datapoints(self, datapoints: Sequence[IndexDatapoint], **kwargs) -> Self:
+        """
+        This method is allowed only if the `index_update_method` of the current index
+        is 'STREAM_UPDATE'.
+        """
         self.index.upsert_datapoints(datapoints, **kwargs)
         return self
 
     def batch_update_datapoints(
         self,
-        datapoints: Sequence[IndexDataPoint],
+        datapoints: Sequence[IndexDatapoint],
         *,
         staging_folder: str,
         is_complete_overwrite: bool = None,
     ) -> Self:
         """
+        This method is allowed only if the `index_update_method` of the current index
+        is 'BATCH_UPDATE'.
+
         Parameters
         ----------
         staging_folder
@@ -157,34 +183,45 @@ class Index:
         -------
             The path of the data file (blob) that was created.
         """
+        print(1)
         assert staging_folder.startswith('gs://')
         folder = f"{utcnow().strftime('%Y%m%d-%H%M%S')}-{str(uuid4()).split('-')[0]}"
         file = GcsBlobUpath(staging_folder, folder, 'data.json')
+        print(2)
         file.write_bytes(
             NewlineDelimitedOrjsonSeriealizer.serialize(
                 [make_batch_update_record(dp) for dp in datapoints]
             )
         )
-        self.index.update_embeddings(
-            contents_delta_uri=str(file.parent),
+        print(3)
+        self.batch_update_from_uri(
+            str(file.parent),
             is_complete_overwrite=is_complete_overwrite,
         )
+        print(4)
         file.parent.rmrf()
         return self
 
     def batch_update_from_uri(
         self, uri: str, *, is_complete_overwrite: bool = None, **kwargs
     ) -> Self:
-        # For function details, see `MatchingEngineIndex.update_embeddings`.
-        # The expected structure and format of the files this URI points to is
-        # described at
-        #   https://cloud.google.com/vertex-ai/docs/vector-search/setup/format-structure
+        """
+        This method is allowed only if the `index_update_method` of the current index
+        is 'BATCH_UPDATE'.
+
+        For function details, see `MatchingEngineIndex.update_embeddings`.
+        The expected structure and format of the files this URI points to is
+        described at
+          https://cloud.google.com/vertex-ai/docs/vector-search/setup/format-structure
+        """
         assert uri.startswith('gs://')
+        print('a')
         self.index.update_embeddings(
             contents_delta_uri=uri,
             is_complete_overwrite=is_complete_overwrite,
             **kwargs,
         )
+        print('b')
         return self
 
     def remove_datapoints(self, datapoint_ids: Sequence[str]) -> Self:
@@ -263,17 +300,17 @@ class Endpoint:
         )
         return self.deployed_idx(deployed_index_id)
 
-    def undeploy_index(self, deployed_index_id: str):
+    def undeploy_index(self, deployed_index_id: str) -> None:
         self.endpoint.undeploy_index(deployed_index_id)
 
-    def undeploy_all(self):
+    def undeploy_all(self) -> None:
         self.endpoint.undeploy_all()
 
     @property
     def deployed_indexes(self):
         return self.endpoint.deployed_indexes
 
-    def delete(self, force: bool = False):
+    def delete(self, force: bool = False) -> None:
         """
         Delete this endpoint.
 
