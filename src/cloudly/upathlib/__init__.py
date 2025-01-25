@@ -28,14 +28,16 @@ __all__ = [
     'FileInfo',
     'LockAcquireError',
     'LockReleaseError',
-    'serializer',
+    'serializer',  # back compat since 0.2.8; will remove in 0.3.x
     'versioned_uploadable',
 ]
 
 
 from pathlib import Path
 
-from . import serializer, versioned_uploadable
+from cloudly.util import serializer
+
+from . import versioned_uploadable
 from ._blob import BlobUpath
 from ._local import LocalPathType, LocalUpath
 from ._upath import FileInfo, LockAcquireError, LockReleaseError, PathType, Upath
