@@ -47,7 +47,6 @@ gcp = [
     "google-auth",
     "google-api-core",
     "google-api-python-client",
-    "google-cloud-aiplatform",
     "google-cloud-batch",
     "google-cloud-compute",
     "google-cloud-logging",
@@ -60,6 +59,9 @@ gcp = [
 bigquery = [
     "google-cloud-bigquery",
     "google-cloud-bigquery-storage",
+]
+vertexai = [
+    "google-cloud-aiplatform",
 ]
 test = [
     "pytest-asyncio",

@@ -12,6 +12,23 @@ def test_list_datasets():
     assert 'tmp' in bigquery.list_datasets()
 
 
+def _test_labels(tab):
+    tab.update_labels(
+        {
+            'friendly_name': 'tom',
+            'age': '38',
+        }
+    )
+    labs = tab.labels
+    print('labels', labs)
+    assert labs['friendly_name'] == 'tom'
+    assert labs['age'] == '38'
+    tab.update_labels({'city': 'ny'})
+    assert tab.labels['city'] == 'ny'
+    tab.update_labels({'age': None})
+    assert 'age' not in tab.labels
+
+
 def test_create():
     def check_table(table):
         assert table.exists()
@@ -65,7 +82,7 @@ def test_create():
         table.drop()
 
 
-def test_temp_table():
+def test_table():
     print()
     data = [
         {'name': 'Tom', 'age': 38},
@@ -93,6 +110,8 @@ def test_temp_table():
     assert tab.count_rows() == len(data) + 2
 
     assert tab.table_id in bigquery.Dataset('tmp').list_tables()
+
+    _test_labels(tab)
 
     path = GcsBlobUpath('/test/bq', bucket_name='zpz-tmp')
     path.rmrf()
@@ -161,6 +180,7 @@ def test_view():
                     'Peter',
                     'Tom',
                 ]
+                _test_labels(view)
             finally:
                 view.drop()
     finally:
@@ -197,6 +217,7 @@ def test_external():
                 {'name': 'Tom', 'age': 38},
                 {'name': 'Peter', 'age': 61},
             ]
+            _test_labels(etable)
 
         finally:
             etable.drop()

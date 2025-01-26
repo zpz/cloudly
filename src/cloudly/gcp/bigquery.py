@@ -29,8 +29,10 @@ from google.cloud.bigquery import RangePartitioning, SchemaField, TimePartitioni
 from typing_extensions import Self
 
 from cloudly.biglist.parquet import ParquetBatchData
-from cloudly.gcp.auth import get_credentials, get_project_id
 from cloudly.util.datetime import utcnow
+
+from .auth import get_credentials, get_project_id
+from .compute import validate_label_key, validate_label_value
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +316,28 @@ class _Table:
         # This is accurate but may be expensive.
         sql = f'SELECT COUNT(*) FROM `{self.qualified_table_id}`'
         return list(read(sql))[0][0]
+
+    @property
+    def labels(self) -> dict[str, str]:
+        return self.table.labels
+
+    def update_labels(self, kv: dict[str, str]) -> None:
+        """
+        Add label entries.
+
+        If a value is `None`, the named label is removed if it exists.
+
+        Labels that are not listed in `kv` are left intact.
+        """
+        tab = self.table
+        labels = tab.labels
+        for k, v in kv.items():
+            validate_label_key(k)
+            if v is not None:
+                validate_label_value(v)
+            labels[k] = v
+        tab.labels = labels
+        get_client().update_table(tab, ['labels'])
 
 
 def _load_job_config(

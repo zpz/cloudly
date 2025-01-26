@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.3.0] - in progress
+
+- `cloudly.gcp.bigquery._Table` gets new property `labels` and new method `update_labels`.
+
+
 ## [0.2.9] - 2025-01-23
 
 - Finetune `cloudly.gcp.bigquery`.

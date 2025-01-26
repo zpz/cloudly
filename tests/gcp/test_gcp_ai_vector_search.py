@@ -1,11 +1,22 @@
 from cloudly.gcp.ai_vector_search import (
+    Endpoint,
     Index,
     init_global_config,
     make_datapoint,
 )
-from cloudly.gcp.storage import GcsBlobUpath
 
 init_global_config('us-west1')
+
+
+def _test_index(index):
+    endpoint = Endpoint.new('stream-endpoint', public_endpoint_enabled=True)
+    print(endpoint)
+    try:
+        deployed_index = endpoint.deploy_index(index)
+        print(deployed_index)
+        deployed_index.undeploy()
+    finally:
+        endpoint.delete()
 
 
 def test_index():
@@ -33,23 +44,29 @@ def test_index():
         ),
     ]
 
-    index1 = Index.new(
-        'myindex1',
+    stream_index = Index.new(
+        'stream-index',
         dimensions=5,
         approximate_neighbors_count=3,
         index_update_method='STREAM_UPDATE',
     )
-    print('name', index1.name)
-    index1.upsert_datapoints(datapoints[:3])
+    print(stream_index)
+    try:
+        stream_index.upsert_datapoints(datapoints[:3])
+        _test_index(stream_index)
+    finally:
+        stream_index.delete()
 
-    uri = GcsBlobUpath('/test/gcp/aivectorsearch', bucket_name='zpz-tmp')
-    uri.rmrf()
+    # TODO: batch update does not work
 
-    index2 = Index.new(
-        'youindex2',
-        dimensions=5,
-        approximate_neighbors_count=3,
-        index_update_method='BATCH_UPDATE',
-    )
-    print('name:', index2.name)
-    index2.batch_update_datapoints(datapoints[3:], staging_folder=str(uri))
+    # uri = GcsBlobUpath('/test/gcp/aivectorsearch', bucket_name='zpz-tmp')
+    # uri.rmrf()
+
+    # index2 = Index.new(
+    #     'batch-index',
+    #     dimensions=5,
+    #     approximate_neighbors_count=3,
+    #     index_update_method='BATCH_UPDATE',
+    # )
+    # print('name:', index2.name)
+    # index2.batch_update_datapoints(datapoints[3:], staging_folder=str(uri))

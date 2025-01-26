@@ -28,6 +28,9 @@ def validate_label_key(val: str) -> str:
 
 
 def validate_label_value(val: str, *, fix: bool = False) -> str:
+    """
+    See https://cloud.google.com/compute/docs/labeling-resources
+    """
     val0 = val
     if fix:
         val = val.strip('- ').lower()
@@ -36,11 +39,12 @@ def validate_label_value(val: str, *, fix: bool = False) -> str:
         val = val.replace('/', '--')
         val = val.strip(' -')
 
-    if len(val) > 63:
-        val = '__' + val[-61:].lstrip('-_')
-        warnings.warn(
-            f"long value was truncated; original value '{val0}' was changed to '{val}"
-        )
+        if len(val) > 63:
+            val = '__' + val[-61:].lstrip('-_')
+            warnings.warn(
+                f"long value was truncated; original value '{val0}' was changed to '{val}"
+            )
+
     allowed = string.ascii_lowercase + string.digits + '-_'
     if any(c not in allowed for c in val):
         raise ValueError(f"original: '{val0}'; after fixes: '{val}'")

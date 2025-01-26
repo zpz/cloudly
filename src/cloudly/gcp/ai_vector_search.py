@@ -7,18 +7,15 @@ __all__ = [
     'Index',
     'Endpoint',
     'DeployedIndex',
+    'IndexDatapoint',
 ]
 
-import warnings
 from collections.abc import Sequence
 from typing import Any, Literal
 from uuid import uuid4
 
 from google.cloud import aiplatform
-from google.cloud.aiplatform.matching_engine import (
-    MatchingEngineIndex,
-    MatchingEngineIndexEndpoint,
-)
+from google.cloud.aiplatform import matching_engine
 from typing_extensions import Self
 
 from cloudly.upathlib.serializer import NewlineDelimitedOrjsonSeriealizer
@@ -28,6 +25,10 @@ from .auth import get_project_id
 from .storage import GcsBlobUpath
 
 IndexDatapoint = aiplatform.compat.types.matching_engine_index.IndexDatapoint
+Namespace = matching_engine.matching_engine_index_endpoint.Namespace
+NumericNamespace = matching_engine.matching_engine_index_endpoint.NumericNamespace
+MatchingEngineIndex = matching_engine.MatchingEngineIndex
+MatchingEngineIndexEndpoint = matching_engine.MatchingEngineIndexEndpoint
 
 
 def init_global_config(region: str):
@@ -48,7 +49,6 @@ def make_datapoint(
     restricts = []
     numeric_restricts = []
     if properties:
-        ignored_fields = set()
         for namespace, value in properties.items():
             assert isinstance(namespace, str)
             if isinstance(value, str):
@@ -67,11 +67,9 @@ def make_datapoint(
                     )
                 )
             else:
-                ignored_fields.add(namespace)
-        if ignored_fields:
-            warnings.warn(
-                f"some values in fields '{ignored_fields}' are not usable and skipped"
-            )
+                raise ValueError(
+                    f"values of type {type(value)} (at key '{namespace}') are not allowed as datapoint properties"
+                )
     return IndexDatapoint(
         datapoint_id=id_,
         feature_vector=embedding,
@@ -134,12 +132,20 @@ class Index:
             )
         return cls(index.resource_name)
 
-    def __init__(self, name: str):
+    def __init__(self, resource_name: str):
         """
-        `name` is like 'projects/166..../locations/us-west1/indexes/1234567890
+        `resource_name` is a fully qualified index resource name,
+        like 'projects/166..../locations/us-west1/indexes/1234567890
         """
-        self.index = MatchingEngineIndex(name)
-        self.name = name
+        self.index = MatchingEngineIndex(resource_name)
+        self.resource_name = resource_name
+        self.display_name = self.index.display_name
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.resource_name}')"
+
+    def __str__(self):
+        return self.__repr__()
 
     def upsert_datapoints(self, datapoints: Sequence[IndexDatapoint], **kwargs) -> Self:
         """
@@ -149,6 +155,7 @@ class Index:
         self.index.upsert_datapoints(datapoints, **kwargs)
         return self
 
+    # TODO: this is not working
     def batch_update_datapoints(
         self,
         datapoints: Sequence[IndexDatapoint],
@@ -183,25 +190,22 @@ class Index:
         -------
             The path of the data file (blob) that was created.
         """
-        print(1)
         assert staging_folder.startswith('gs://')
         folder = f"{utcnow().strftime('%Y%m%d-%H%M%S')}-{str(uuid4()).split('-')[0]}"
         file = GcsBlobUpath(staging_folder, folder, 'data.json')
-        print(2)
         file.write_bytes(
             NewlineDelimitedOrjsonSeriealizer.serialize(
                 [make_batch_update_record(dp) for dp in datapoints]
             )
         )
-        print(3)
         self.batch_update_from_uri(
             str(file.parent),
             is_complete_overwrite=is_complete_overwrite,
         )
-        print(4)
         file.parent.rmrf()
         return self
 
+    # TODO: this is not working
     def batch_update_from_uri(
         self, uri: str, *, is_complete_overwrite: bool = None, **kwargs
     ) -> Self:
@@ -215,18 +219,27 @@ class Index:
           https://cloud.google.com/vertex-ai/docs/vector-search/setup/format-structure
         """
         assert uri.startswith('gs://')
-        print('a')
+        print('uri', uri)
         self.index.update_embeddings(
             contents_delta_uri=uri,
             is_complete_overwrite=is_complete_overwrite,
             **kwargs,
         )
-        print('b')
         return self
 
     def remove_datapoints(self, datapoint_ids: Sequence[str]) -> Self:
         self.index.remove_datapoints(datapoint_ids)
         return self
+
+    @property
+    def deployed_indexes(self):
+        raise NotImplementedError
+
+    def delete(self):
+        """
+        Delete this index (permanently).
+        """
+        self.index.delete()
 
 
 class Endpoint:
@@ -235,6 +248,7 @@ class Endpoint:
         cls,
         display_name: str,
         *,
+        description: str | None = None,
         public_endpoint_enabled: bool = False,
         labels: dict[str, str] | None = None,
         **kwargs,
@@ -242,14 +256,22 @@ class Endpoint:
         endpoint = MatchingEngineIndexEndpoint.create(
             display_name=display_name,
             public_endpoint_enabled=public_endpoint_enabled,
+            description=description,
             labels=labels,
             **kwargs,
         )
         return cls(endpoint.resource_name)
 
-    def __init__(self, name: str):
-        self.name = name
-        self.endpoint = MatchingEngineIndexEndpoint(name)
+    def __init__(self, resource_name: str):
+        self.resource_name = resource_name
+        self.endpoint = MatchingEngineIndexEndpoint(resource_name)
+        self.display_name = self.endpoint.display_name
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}('{self.resource_name}')"
+
+    def __str__(self):
+        return self.__repr__()
 
     def deploy_index(
         self,
@@ -280,9 +302,7 @@ class Endpoint:
             If missing, `min_replica_count * 2` is used.
         """
         if not deployed_index_id:
-            deployed_index_id = (
-                f"{utcnow().strftime('%Y%m%d_%H%M%S')}_{str(uuid4()).split('-')[0]}"
-            )
+            deployed_index_id = f"deployed_{utcnow().strftime('%Y%m%d_%H%M%S')}_{str(uuid4()).split('-')[0]}"
         if not display_name:
             display_name = (
                 f"{index.display_name} since {utcnow().strftime('%Y%m%d-%H%M%S')}"
@@ -300,6 +320,9 @@ class Endpoint:
         )
         return self.deployed_idx(deployed_index_id)
 
+    def deployed_idx(self, deployed_index_id: str):
+        return DeployedIndex(self, deployed_index_id)
+
     def undeploy_index(self, deployed_index_id: str) -> None:
         self.endpoint.undeploy_index(deployed_index_id)
 
@@ -307,8 +330,11 @@ class Endpoint:
         self.endpoint.undeploy_all()
 
     @property
-    def deployed_indexes(self):
-        return self.endpoint.deployed_indexes
+    def deployed_indexes(self) -> list[tuple[str, str]]:
+        # Return 'deployed_index_id' and 'index_resource_name' tuples.
+        zz = self.endpoint.deployed_indexes
+        zz = sorted(((d.id, d.index) for d in zz))
+        return zz
 
     def delete(self, force: bool = False) -> None:
         """
@@ -318,8 +344,8 @@ class Endpoint:
         """
         self.endpoint.delete(force=force)
 
-    def deployed_idx(self, deployed_index_id: str):
-        return DeployedIndex(self, deployed_index_id)
+    # TODO:
+    # checkout `Index.index.to_dict()['metadata']`
 
 
 class DeployedIndex:
@@ -331,12 +357,96 @@ class DeployedIndex:
     def __init__(self, endpoint: Endpoint, deployed_index_id: str):
         self.endpoint = endpoint
         self.deployed_index_id = deployed_index_id
+        self._index_resource_name = None
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.endpoint}, '{self.deployed_index_id}')"
+
+    def __str__(self):
+        return self.__repr__()
+
+    @property
+    def index_resource_name(self) -> str:
+        if not self._index_resource_name:
+            zz = self.endpoint.endpoint.deployed_indexes
+            for z in zz:
+                if z.id == self.deployed_index_id:
+                    self._index_resource_name = z.index
+                    break
+            if not self._index_resource_name:
+                raise Exception('could not find the deployed index on the endpoint')
+        return self._index_resource_name
+
+    @property
+    def index(self) -> Index:
+        return Index(self.index_resource_name)
+
+    def undeploy(self):
+        self.endpoint.undeploy_index(self.deployed_index_id)
 
     def find_neighbors(
         self,
+        queries_or_embedding_ids: Sequence[Sequence[float]] | Sequence[str],
+        num_neighbors: int,
         *,
-        deployed_index_id: str,
-        embeddings: list[list[float]],
-        num_neighbors: int = 10,
-    ):
-        pass
+        filter: list[Namespace | Sequence | dict] | None = None,
+        numeric_filter: list[NumericNamespace | Sequence | dict] | None = None,
+        return_full_datapoint: bool = False,
+        **kwargs,
+    ) -> list[list[dict]]:
+        if return_full_datapoint:
+            raise NotImplementedError
+            # The response conversion code is not yet implemented for this case.
+        if isinstance(queries_or_embedding_ids[0], str):
+            embedding_ids = queries_or_embedding_ids
+            queries = None
+        else:
+            queries = queries_or_embedding_ids
+            embedding_ids = None
+        if filter:
+            filter = [
+                f
+                if isinstance(f, Namespace)
+                else (Namespace(**f) if isinstance(f, dict) else Namespace(*f))
+                for f in filter
+            ]
+        if numeric_filter:
+            numeric_filter = [
+                f
+                if isinstance(f, NumericNamespace)
+                else (
+                    NumericNamespace(**f)
+                    if isinstance(f, dict)
+                    else NumericNamespace(*f)
+                )
+                for f in numeric_filter
+            ]
+        resp = self.endpoint.find_neighbors(
+            deployed__index_id=self.deployed_index_id,
+            queries=queries,
+            embedding_ids=embedding_ids,
+            num_neighbors=num_neighbors,
+            filter=filter,
+            numeric_filter=numeric_filter,
+            return_full_datapoint=return_full_datapoint,
+            **kwargs,
+        )
+        results = []
+        for neighbors in resp:
+            results.append(
+                [
+                    {
+                        'embedding_id': neighbor.id,
+                        'dense_score': neighbor.distance if neighbor.distance else 0.0,
+                    }
+                    for neighbor in neighbors
+                ]
+            )
+        assert len(results) == len(queries_or_embedding_ids)
+        return results
+
+    def get_datapoints_by_ids(self):
+        raise NotImplementedError
+
+    def get_datapoints_by_filters(self):
+        raise NotImplementedError
