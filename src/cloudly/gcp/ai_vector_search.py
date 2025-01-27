@@ -286,7 +286,7 @@ class Index:
         return self
 
     def deploy(self, endpoint_name: str, **kwargs) -> DeployedIndex:
-        return Endpoint(endpoint_name).deployed_index(self, **kwargs)
+        return Endpoint(endpoint_name).deploy_index(self, **kwargs)
 
     @property
     def deployed_indexes(self) -> list[dict]:

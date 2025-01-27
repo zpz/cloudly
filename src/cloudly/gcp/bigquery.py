@@ -404,6 +404,8 @@ class _Table:
         If a value is `None`, the named label is removed if it exists.
 
         Labels that are not listed in `kv` are left intact.
+
+        TODO: test on this method failed on a View with `PreconditionFaield`.
         """
         tab = self.table
         labels = tab.labels

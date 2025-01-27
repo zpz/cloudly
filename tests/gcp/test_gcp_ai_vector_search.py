@@ -1,3 +1,5 @@
+import pytest
+
 from cloudly.gcp.ai_vector_search import (
     Endpoint,
     Index,
@@ -32,7 +34,8 @@ def _test_index(index):
     endpoint.delete()
 
 
-def _test_index():
+@pytest.mark.skip(reason='not working')
+def test_index():
     datapoints = [
         make_datapoint(
             'a1', [0.12, 0.22, 0.13, 0.52, 0.40], {'name': 'Peter', 'age': 28}
