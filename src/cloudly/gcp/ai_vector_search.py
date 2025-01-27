@@ -10,6 +10,8 @@ __all__ = [
     'IndexDatapoint',
 ]
 
+import functools
+import logging
 from collections.abc import Sequence
 from typing import Any, Literal
 from uuid import uuid4
@@ -23,6 +25,8 @@ from cloudly.util.datetime import utcnow
 
 from .auth import get_project_id
 from .storage import GcsBlobUpath
+
+logger = logging.getLogger(__name__)
 
 IndexDatapoint = aiplatform.compat.types.matching_engine_index.IndexDatapoint
 Namespace = matching_engine.matching_engine_index_endpoint.Namespace
@@ -132,20 +136,70 @@ class Index:
             )
         return cls(index.resource_name)
 
-    def __init__(self, resource_name: str):
+    def __init__(self, name: str):
         """
-        `resource_name` is a fully qualified index resource name,
-        like 'projects/166..../locations/us-west1/indexes/1234567890
+        `name` is either a fully qualified "resource name"
+        (like 'projects/166..../locations/us-west1/indexes/1234567890')
+        or ID (like '1234567890', shown on GCP dashboard).
         """
-        self.index = MatchingEngineIndex(resource_name)
-        self.resource_name = resource_name
-        self.display_name = self.index.display_name
+        self.name = name
+        self._display_name = None
+        self._resource_name = None
+        self._config = None
+        self._dimensions = None
 
     def __repr__(self):
-        return f"{self.__class__.__name__}('{self.resource_name}')"
+        return f"{self.__class__.__name__}('{self.name}')"
 
     def __str__(self):
         return self.__repr__()
+
+    def __reduce__(self):
+        return type(self), (self.name,)
+
+    @property
+    def index(self) -> MatchingEngineIndex:
+        # `self.index` has some useful attributes directly accessible as instance attributes.
+        # Some of these attributes are cached on `self` because they won't change.
+        index = MatchingEngineIndex(self.name)
+        self._display_name = index.display_name
+        self._resource_name = index.resource_name
+        self._config = index.to_dict()['metadata']['config']
+        self._dimensions = int(self._config['dimensions'])
+        return index
+
+    @property
+    def display_name(self) -> str:
+        if self._display_name is None:
+            self.index
+        return self._display_name
+
+    @property
+    def resource_name(self) -> str:
+        if self._resource_name is None:
+            self.index
+        return self._resource_name
+
+    @property
+    def config(self) -> dict:
+        if self._config is None:
+            self.index
+        return self._config
+
+    @property
+    def dimensions(self) -> int:
+        if self._dimensions is None:
+            self.index
+        return self._dimensions
+
+    def __len__(self) -> int | None:
+        # Number of datapoints in the index.
+        # TODO: why could this return `None`?
+        # TODO: is `__len__` suitable if the return value can be `None`?
+        n = self.index.to_dict()['indexStats'].get('vectorsCount')
+        if n is None:
+            return n
+        return int(n)
 
     def upsert_datapoints(self, datapoints: Sequence[IndexDatapoint], **kwargs) -> Self:
         """
@@ -231,11 +285,28 @@ class Index:
         self.index.remove_datapoints(datapoint_ids)
         return self
 
-    @property
-    def deployed_indexes(self):
-        raise NotImplementedError
+    def deploy(self, endpoint_name: str, **kwargs) -> DeployedIndex:
+        return Endpoint(endpoint_name).deployed_index(self, **kwargs)
 
-    def delete(self):
+    @property
+    def deployed_indexes(self) -> list[dict]:
+        return [
+            {
+                'endpoint_name': di.index_endpoint,  # resource_name
+                'deployed_index_id': di.deployed_index_id,
+                'display_name': di.display_name,
+            }
+            for di in self.index.deployed_indexes
+        ]
+
+    def undeploy(self, endpoint_name: str, deployed_index_id: str) -> None:
+        Endpoint(endpoint_name).undeploy_index(deployed_index_id)
+
+    def undeploy_all(self) -> None:
+        for zz in self.deployed_indexes:
+            self.undeploy(zz['endpoint_name'], zz['deployed_index_id'])
+
+    def delete(self) -> None:
         """
         Delete this index (permanently).
         """
@@ -262,21 +333,48 @@ class Endpoint:
         )
         return cls(endpoint.resource_name)
 
-    def __init__(self, resource_name: str):
-        self.resource_name = resource_name
-        self.endpoint = MatchingEngineIndexEndpoint(resource_name)
-        self.display_name = self.endpoint.display_name
+    def __init__(self, name: str):
+        """
+        `name` is either a fully qualified "resource_name"
+        or ID (like '1234567890', shown on GCP dashboard).
+        """
+        self.name = name
+        self._display_name = None
+        self._resource_name = None
 
     def __repr__(self):
-        return f"{self.__class__.__name__}('{self.resource_name}')"
+        return f"{self.__class__.__name__}('{self.name}')"
 
     def __str__(self):
         return self.__repr__()
+
+    def __reduce__(self):
+        return type(self), (self.name,)
+
+    @property
+    def endpoint(self) -> MatchingEngineIndexEndpoint:
+        endpoint = MatchingEngineIndexEndpoint(self.name)
+        self._display_name = endpoint.display_name
+        self._resource_name = endpoint.resource_name
+        return endpoint
+
+    @property
+    def display_name(self) -> str:
+        if self._display_name is None:
+            self.endpoint
+        return self._display_name
+
+    @property
+    def resource_name(self) -> str:
+        if self._resource_name is None:
+            self.endpoint
+        return self._resource_name
 
     def deploy_index(
         self,
         index: Index,
         *,
+        action_if_exists: Literal['return', 'replace', 'repeat', 'raise'] = 'raise',
         deployed_index_id: str | None = None,
         display_name: str | None = None,
         machine_type: str | None = None,
@@ -287,6 +385,13 @@ class Endpoint:
         """
         Parameters
         ----------
+        action_if_exists
+            The action to take when a deployment of the index already exists on this endpoint:
+
+            - 'return': return the existing deployment
+            - 'replace': undeploy the existing one, then deploy a new one
+            - 'repeat': leave the existing one intact; deploy a new (additional) one
+            - 'raise': raise exception
         deployed_index_id
             Up to 128 characters long and must start with a letter and only contain
             letters, numbers, and underscores.
@@ -301,6 +406,18 @@ class Endpoint:
         max_replica_count
             If missing, `min_replica_count * 2` is used.
         """
+        if action_if_exists != 'repeat':
+            for zz in self.deployed_indexes:
+                if zz['index_name'] == index.resource_name:
+                    if action_if_exists == 'return':
+                        return self.deployed_index(zz['deployed_index_id'])
+                    if action_if_exists == 'replace':
+                        self.undeploy_index(zz['deployed_index_id'])
+                    if action_if_exists == 'raise':
+                        raise RuntimeError(
+                            f"the index '{index}' is already deployed to the endpoint '{self}'"
+                        )
+
         if not deployed_index_id:
             deployed_index_id = f"deployed_{utcnow().strftime('%Y%m%d_%H%M%S')}_{str(uuid4()).split('-')[0]}"
         if not display_name:
@@ -318,10 +435,10 @@ class Endpoint:
             max_replica_count=max_replica_count,
             **kwargs,
         )
-        return self.deployed_idx(deployed_index_id)
+        return self.deployed_index(deployed_index_id)
 
-    def deployed_idx(self, deployed_index_id: str):
-        return DeployedIndex(self, deployed_index_id)
+    def deployed_index(self, deployed_index_id: str) -> DeployedIndex:
+        return DeployedIndex(self.name, deployed_index_id)
 
     def undeploy_index(self, deployed_index_id: str) -> None:
         self.endpoint.undeploy_index(deployed_index_id)
@@ -330,11 +447,15 @@ class Endpoint:
         self.endpoint.undeploy_all()
 
     @property
-    def deployed_indexes(self) -> list[tuple[str, str]]:
-        # Return 'deployed_index_id' and 'index_resource_name' tuples.
-        zz = self.endpoint.deployed_indexes
-        zz = sorted(((d.id, d.index) for d in zz))
-        return zz
+    def deployed_indexes(self) -> list[dict]:
+        return [
+            {
+                'index_name': z.index,  # resource_name
+                'deployed_index_id': z.id,
+                'display_name': z.display_name,
+            }
+            for z in self.endpoint.deployed_indexes
+        ]
 
     def delete(self, force: bool = False) -> None:
         """
@@ -344,49 +465,45 @@ class Endpoint:
         """
         self.endpoint.delete(force=force)
 
-    # TODO:
-    # checkout `Index.index.to_dict()['metadata']`
-
 
 class DeployedIndex:
     """
-    The class `DeployedIndex` is responsible for making queries to an `Index` that has been deployed at an endpoint.
-    Instantiate a `DeployedIndex` object via `Endpoint.deploy_index` or `Endpoint.deployed_index`.
+    The class `DeployedIndex` is responsible for making queries to an `Index` that has been deployed at an Endpoint.
+    Instantiate a `DeployedIndex` object via `Endpoint.deploy_index` or `Endpoint.deployed_index` or `Index.deploy`.
     """
 
-    def __init__(self, endpoint: Endpoint, deployed_index_id: str):
-        self.endpoint = endpoint
+    def __init__(self, endpoint_name: str, deployed_index_id: str):
+        self.endpoint_name = endpoint_name
         self.deployed_index_id = deployed_index_id
-        self._index_resource_name = None
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.endpoint}, '{self.deployed_index_id}')"
+        return f"{self.__class__.__name__}('{self.endpoint_name}', '{self.deployed_index_id}')"
 
     def __str__(self):
         return self.__repr__()
 
-    @property
-    def index_resource_name(self) -> str:
-        if not self._index_resource_name:
-            zz = self.endpoint.endpoint.deployed_indexes
-            for z in zz:
-                if z.id == self.deployed_index_id:
-                    self._index_resource_name = z.index
-                    break
-            if not self._index_resource_name:
-                raise Exception('could not find the deployed index on the endpoint')
-        return self._index_resource_name
+    def __reduce__(self):
+        return type(self), (self.endpoint_name, self.deployed_index_id)
 
-    @property
+    @functools.cached_property
+    def endpoint(self) -> Endpoint:
+        return Endpoint(self.endpoint_name)
+
+    @functools.cached_property
     def index(self) -> Index:
-        return Index(self.index_resource_name)
+        for zz in self.endpoint.deployed_indexes:
+            if zz['deployed_index_id'] == self.deployed_index_id:
+                return Index(zz['index_name'])
+        raise RuntimeError(
+            f"cannot find deployed_index_id '{self.deployed_index_id}' at endpoint {self.endpoint}"
+        )
 
     def undeploy(self):
         self.endpoint.undeploy_index(self.deployed_index_id)
 
     def find_neighbors(
         self,
-        queries_or_embedding_ids: Sequence[Sequence[float]] | Sequence[str],
+        queries_or_ids: Sequence[Sequence[float]] | Sequence[str],
         num_neighbors: int,
         *,
         filter: list[Namespace | Sequence | dict] | None = None,
@@ -397,12 +514,12 @@ class DeployedIndex:
         if return_full_datapoint:
             raise NotImplementedError
             # The response conversion code is not yet implemented for this case.
-        if isinstance(queries_or_embedding_ids[0], str):
-            embedding_ids = queries_or_embedding_ids
+        if isinstance(queries_or_ids[0], str):
+            ids = queries_or_ids
             queries = None
         else:
-            queries = queries_or_embedding_ids
-            embedding_ids = None
+            queries = queries_or_ids
+            ids = None
         if filter:
             filter = [
                 f
@@ -424,7 +541,7 @@ class DeployedIndex:
         resp = self.endpoint.find_neighbors(
             deployed__index_id=self.deployed_index_id,
             queries=queries,
-            embedding_ids=embedding_ids,
+            embedding_ids=ids,
             num_neighbors=num_neighbors,
             filter=filter,
             numeric_filter=numeric_filter,
@@ -436,17 +553,43 @@ class DeployedIndex:
             results.append(
                 [
                     {
-                        'embedding_id': neighbor.id,
+                        'datapoint_id': neighbor.id,
                         'dense_score': neighbor.distance if neighbor.distance else 0.0,
                     }
                     for neighbor in neighbors
                 ]
             )
-        assert len(results) == len(queries_or_embedding_ids)
+        assert len(results) == len(queries_or_ids)
         return results
 
-    def get_datapoints_by_ids(self):
-        raise NotImplementedError
+    def get_datapoints(self, ids: Sequence[str]) -> list[IndexDatapoint]:
+        """
+        Retrieve datapoints with the specified IDs.
+        """
+        return self.endpoint.read_index_datapoints(
+            deployed_index_id=self.deployed_index_id, ids=ids
+        )
 
-    def get_datapoints_by_filters(self):
-        raise NotImplementedError
+    def find_datapoints(
+        self,
+        *,
+        filter: list[Namespace | Sequence | dict] | None = None,
+        numeric_filter: list[NumericNamespace | Sequence | dict] | None = None,
+        max_datapoints: int = 10_000,
+        **kwargs,
+    ) -> list[str]:
+        """
+        Retrieve datapoints that satisfy the filter conditions (rather than via "close neighbor" relationship).
+        """
+        assert filter or numeric_filter
+        embedding = [[0.0] * self.index.dimensions]
+        neighbors = self.find_neighbors(
+            embedding,
+            num_neighbors=max_datapoints,
+            filter=filter,
+            numeric_filter=numeric_filter,
+            **kwargs,
+        )
+        if neighbors:
+            return [n['datapoint_id'] for n in neighbors]
+        return []

@@ -410,6 +410,8 @@ class ParquetBatchData(Seq):
         self._data = data
         self.scalar_as_py = True
         """Indicate whether scalar values should be converted to Python types from `pyarrow`_ types."""
+        self.row_to_dict = True
+        """`__getitem__` and `__iter__` produce tuples if `row_to_dict` is `False`; otherwise dicts."""
         self.num_rows = data.num_rows
         self.num_columns = data.num_columns
         self.column_names = data.schema.names
@@ -435,8 +437,7 @@ class ParquetBatchData(Seq):
         """
         Get one row (or "record").
 
-        If the object has a single column, then return its value in the specified row.
-        If the object has multiple columns, return a dict with column names as keys.
+        Return a tuple or a dict depending on the value of `self.row_to_dict`.
         The values are converted to Python builtin types if :data:`scalar_as_py`
         is ``True``.
 
@@ -451,35 +452,37 @@ class ParquetBatchData(Seq):
         if idx < 0 or idx >= self.num_rows:
             raise IndexError(idx)
 
-        if self.num_columns == 1:
-            z = self._data.column(0)[idx]
+        if self.row_to_dict:
+            z = {col: self._data.column(col)[idx] for col in self.column_names}
             if self.scalar_as_py:
-                return z.as_py()
+                return {k: v.as_py() for k, v in z.items()}
             return z
-
-        z = {col: self._data.column(col)[idx] for col in self.column_names}
-        if self.scalar_as_py:
-            return {k: v.as_py() for k, v in z.items()}
-        return z
+        else:
+            z = tuple(self._data.column(col)[idx] for col in self.column_names)
+            if self.scalar_as_py:
+                return tuple(v.as_py() for v in z)
+            return z
 
     def __iter__(self):
         """
         Iterate over rows.
         The type of yielded individual elements is the same as :meth:`__getitem__`.
         """
-        if self.num_columns == 1:
-            if self.scalar_as_py:
-                yield from (v.as_py() for v in self._data.column(0))
-            else:
-                yield from self._data.column(0)
-        else:
-            names = self.column_names
-            if self.scalar_as_py:
+        names = self.column_names
+        if self.scalar_as_py:
+            if self.row_to_dict:
                 for row in zip(*self._data.columns):
                     yield dict(zip(names, (v.as_py() for v in row)))
             else:
                 for row in zip(*self._data.columns):
+                    yield tuple(v.as_py() for v in row)
+        else:
+            if self.row_to_dict:
+                for row in zip(*self._data.columns):
                     yield dict(zip(names, row))
+            else:
+                for row in zip(*self._data.columns):
+                    yield tuple(row)
 
     def columns(self, cols: Sequence[str]) -> ParquetBatchData:
         """

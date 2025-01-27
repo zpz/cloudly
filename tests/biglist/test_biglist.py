@@ -603,7 +603,7 @@ def test_parquet_biglist(tmp_path):
         d1 = d.columns(['key', 'value'])
         print(d1[3])
         d2 = d1.columns(['value'])
-        assert isinstance(d2[2], str)
+        assert isinstance(d2[2]['value'], str)
         print(d2[2])
         with pytest.raises(ValueError):
             d2.columns(['key'])

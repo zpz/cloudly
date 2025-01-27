@@ -10,16 +10,29 @@ init_global_config('us-west1')
 
 def _test_index(index):
     endpoint = Endpoint.new('stream-endpoint', public_endpoint_enabled=True)
-    print(endpoint)
-    try:
-        deployed_index = endpoint.deploy_index(index)
-        print(deployed_index)
-        deployed_index.undeploy()
-    finally:
-        endpoint.delete()
+    print('endpoint', endpoint)
+    print('    name', endpoint.name)
+    print('    resource_name', endpoint.resource_name)
+    print('    display_name', endpoint.display_name)
+    assert not endpoint.deployed_indexes
+
+    deployed_index = endpoint.deploy_index(index)
+    print('deployed_index', deployed_index)
+    print('    index', deployed_index.index)
+    print('    endpoint', deployed_index.endpoint)
+    zz = endpoint.deployed_indexes
+    assert len(zz) == 1
+    di2 = index.deploy(endpoint.name, action_if_exists='repeat')
+    print(di2)
+    assert len(endpoint.deployed_indexes) == 2
+    endpoint.undeploy_index(di2.deployed_index_id)
+    assert len(index.deployed_indexes) == 1
+    deployed_index.undeploy()
+
+    endpoint.delete()
 
 
-def test_index():
+def _test_index():
     datapoints = [
         make_datapoint(
             'a1', [0.12, 0.22, 0.13, 0.52, 0.40], {'name': 'Peter', 'age': 28}
@@ -44,18 +57,29 @@ def test_index():
         ),
     ]
 
+    print()
     stream_index = Index.new(
         'stream-index',
         dimensions=5,
         approximate_neighbors_count=3,
         index_update_method='STREAM_UPDATE',
     )
-    print(stream_index)
-    try:
-        stream_index.upsert_datapoints(datapoints[:3])
-        _test_index(stream_index)
-    finally:
-        stream_index.delete()
+    print('index', stream_index)
+    print('    name', stream_index.name)
+    print('    display_name', stream_index.display_name)
+    print('    resource_name', stream_index.resource_name)
+    print('    dimensions', stream_index.dimensions)
+    assert stream_index.dimensions == 5
+    assert not stream_index.deployed_indexes
+
+    stream_index.upsert_datapoints(datapoints[:3])
+    # assert len(stream_index) == 3
+    stream_index.upsert_datapoints(datapoints[3:5])
+    # assert len(stream_index) == 5
+    _test_index(stream_index)
+
+    stream_index.undeploy_all()
+    stream_index.delete()
 
     # TODO: batch update does not work
 

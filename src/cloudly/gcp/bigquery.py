@@ -4,6 +4,7 @@ __all__ = [
     'get_client',
     'list_datasets',
     'dataset',
+    'table',
     'query',
     'read',
     'read_streams',
@@ -78,6 +79,10 @@ def dataset(dataset_id: str, project_id: str | None = None) -> Dataset:
     return Dataset(dataset_id, project_id)
 
 
+def table(table_id: str, dataset_id: str, project_id: str | None = None) -> Table:
+    return Table(table_id=table_id, dataset_id=dataset_id, project_id=project_id)
+
+
 def query(sql: str, *, wait: bool = True, **kwargs):
     job = Job(get_client().query(sql, **kwargs))
     if wait:
@@ -114,7 +119,13 @@ def read(sql: str, *, as_dict: bool = False, **kwargs) -> Iterator | Table:
             yield row.values()
 
 
-def read_streams(stream_names: Iterable[str]) -> Iterator[ParquetBatchData]:
+def read_streams(
+    stream_names: Iterable[str],
+    *,
+    num_workers: int = 4,
+    as_dict: bool = False,
+    queue_cls=queue.Queue,
+) -> Iterator[tuple] | Iterator[dict]:
     """
     The "Storage API" is used to pull data at high speed and throughput from a large table by
     concurrently pulling from "streams".
@@ -123,16 +134,71 @@ def read_streams(stream_names: Iterable[str]) -> Iterator[ParquetBatchData]:
     workers (threads, processes, machines) for concurrent and/or distributed consumption.
     This function shows how one worker can consume an iterable of stream names.
     User may need to adapt this code with additional setup.
+
+    The parameter `queue_cls` is provided to allow customization that facilitates early-stopping
+    the worker threads. One particular possibility in mind is `ResponsiveQueue` in the package `mpservice`.
     """
+
+    def enqueue(names, q):
+        for n in names:
+            q.put(n)
+        q.put(None)
+
+    def read(qin, qout, client):
+        while True:
+            name = qin.get()
+            if name is None:
+                qin.put(None)
+                break
+            logger.debug("pulling data from stream '%s'", name)
+            reader = client.read_rows(name)
+            npages = 0
+            for page in reader.rows().pages:
+                batch = ParquetBatchData(page.to_arrow)
+                qout.put(batch)
+                npages += 1
+            logger.debug("pulled data from stream '%s' with %d pages", name, npages)
+        qout.put(None)
+
+    qin = queue_cls(maxsize=1)
+    qout = queue_cls(maxsize=100)
+
+    workers = []
+    workers.append(
+        threading.Thread(
+            target=enqueue,
+            args=(stream_names, qin),
+            name='thread-read-BQ-streams-0',
+        )
+    )
+
     client = get_storage_client()
-    for stream_name in stream_names:
-        logger.debug("pulling data from stream '%s'", stream_name)
-        reader = client.read_rows(stream_name)
-        npages = 0
-        for page in reader.rows().pages:
-            yield ParquetBatchData(page.to_arrow())
-            npages += 1
-        logger.debug("pulled data from stream '%s' with %d pages", stream_name, npages)
+    for idx in range(num_workers):
+        workers.append(
+            threading.Thread(
+                target=read,
+                args=(qin, qout, client),
+                name=f'thread-read-BQ-streams-{idx+1}',
+            )
+        )
+
+    for w in workers:
+        w.start()
+
+    nnone = 0
+    while True:
+        batch = qout.get()
+        if batch is None:
+            nnone += 1
+            if nnone == num_workers:
+                break
+            else:
+                continue
+        batch.row_to_dict = as_dict
+        yield from batch
+
+    for w in workers:
+        w.join()
 
 
 class Job:
@@ -165,9 +231,19 @@ class Job:
 
     def result(self):
         # This will wait for the job to complete.
-        z = self._job.result()
+        try:
+            z = self._job.result()
+        except google.api_core.exceptions.BadRequest:
+            if isinstance(self._job, bigquery.QueryJob):
+                print()
+                print(self._job.query)
+                print()
+            raise
         # A possible customization is to alert on high cost here.
         return z
+
+    def done(self) -> bool:
+        return self.job.done()
 
     @property
     def slot_hours(self) -> float:

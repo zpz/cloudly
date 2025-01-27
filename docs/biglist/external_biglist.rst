@@ -267,11 +267,11 @@ It's an interesting case when there's only one column:
 >>> len(sales)
 61
 >>> sales[3]
-237
+{'sales': 237}
 >>> list(sales)  # doctest: +ELLIPSIS
-[234, 235, 236, 237, 238, 239, ..., 291, 292, 293, 294]
+[{'sales': 234}, {'sales': 235}, {'sales': 236}, {'sales': 237}, {'sales': 238}, {'sales': 239}, ..., {'sales': 291}, {'sales': 292}, {'sales': 293}, {'sales': 294}]
 >>> Slicer(sales)[:8].collect()
-[234, 235, 236, 237, 238, 239, 240, 241]
+[{'sales': 234}, {'sales': 235}, {'sales': 236}, {'sales': 237}, {'sales': 238}, {'sales': 239}, {'sales': 240}, {'sales': 241}]
 
 Notice the type of the values (rows) returned from the element access methods: it's *not* ``dict``.
 Because there's only one column whose name is known, there is no need to carry that info with every row.
@@ -279,8 +279,8 @@ Also note that the values have been converted to Python builtin types.
 The original `pyarrow`_ values will not look as nice:
    
 >>> sales.scalar_as_py = False
->>> Slicer(sales)[:8].collect()
-[<pyarrow.Int64Scalar: 234>, <pyarrow.Int64Scalar: 235>, <pyarrow.Int64Scalar: 236>, <pyarrow.Int64Scalar: 237>, <pyarrow.Int64Scalar: 238>, <pyarrow.Int64Scalar: 239>, <pyarrow.Int64Scalar: 240>, <pyarrow.Int64Scalar: 241>]
+>>> Slicer(sales)[:3].collect()
+[{'sales': <pyarrow.Int64Scalar: 234>}, {'sales': <pyarrow.Int64Scalar: 235>}, {'sales': <pyarrow.Int64Scalar: 236>}]
 >>> sales.scalar_as_py = True
 
 Both :class:`ParquetFileReader` and :class:`ParquetBatchData` have another method called :meth:`~ParquetFileReader.column`
