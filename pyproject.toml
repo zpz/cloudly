@@ -60,6 +60,9 @@ bigquery = [
     "google-cloud-bigquery",
     "google-cloud-bigquery-storage",
 ]
+vertexai = [
+    "google-cloud-aiplatform",
+]
 test = [
     "pytest-asyncio",
     "pytest-mock",
