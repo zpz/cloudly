@@ -39,10 +39,10 @@ def test_create():
                 {'name': 'Ali', 'age': 80},
             )
         )
-        print(z)
+        assert not z
         assert table.count_rows() == 3
 
-    name = bigquery._make_temp_name()
+    name = bigquery.Dataset.make_temp_table_name()
     sql = f"""\
         CREATE TABLE `{get_project_id()}.tmp.{name}` (
             name STRING,
@@ -106,9 +106,9 @@ def test_table():
 
     zz = tab.insert_rows([{'name': 'Paul', 'age': 60}, {'name': 'Jessica', 'age': 9}])
     print(zz)
+    print(tab.count_rows())
 
     assert tab.count_rows() == len(data) + 2
-
     assert tab.table_id in bigquery.Dataset('tmp').list_tables()
 
     _test_labels(tab)
@@ -221,5 +221,80 @@ def test_external():
 
         finally:
             etable.drop()
+    finally:
+        table.drop()
+
+
+def test_scalar_function():
+    data = [
+        {'name': 'Tom', 'age': 38},
+        {'name': 'Peter', 'age': 61},
+        {'name': 'Jessica', 'age': 22},
+        {'name': 'Joe', 'age': 8},
+        {'name': 'John', 'age': 15},
+    ]
+    table = bigquery.dataset('tmp').temp_table().load_from_json(data)
+    try:
+        assert table.exists()
+        sql = f"""
+            CREATE TEMP FUNCTION double_age(year INT64)
+            RETURNS INT64
+            AS (
+                year + year
+            );
+            SELECT name, age, double_age(age) as older
+            FROM `{table.qualified_table_id}`;
+        """
+        zz = list(bigquery.read(sql, as_dict=True))
+        for row in zz:
+            assert row['older'] == 2 * row['age']
+
+        udf = (
+            bigquery.dataset('tmp')
+            .scalar_function('get_old')
+            .drop_if_exists()
+            .create(
+                language='SQL',
+                body='year * 2',
+                arguments=[
+                    bigquery.ScalarFunction.routine_input_argument('year', 'INT64')
+                ],
+                return_type='int64',
+            )
+        )
+        assert udf.exists()
+        assert udf.routine_id in bigquery.dataset('tmp').list_scalar_functions()
+
+        sql = f"""
+            SELECT name, age, `{udf.qualified_routine_id}`(age) as older
+            FROM `{table.qualified_table_id}`
+        """
+        zz = list(bigquery.read(sql, as_dict=True))
+        for z in zz:
+            assert z['older'] == z['age'] * 2
+
+        udf = (
+            bigquery.dataset('tmp')
+            .scalar_function('merge')
+            .drop_if_exists()
+            .create(
+                language='JAVASCRIPT',
+                arguments=[
+                    bigquery.ScalarFunction.routine_input_argument('name', 'STRING'),
+                    bigquery.ScalarFunction.routine_input_argument('age', 'int64'),
+                ],
+                body="return name + '-' + age;",
+                return_type='string',
+            )
+        )
+        assert udf.exists()
+
+        sql = f"""
+            SELECT name, age, `{udf.qualified_routine_id}`(name, age) as merged
+            FROM `{table.qualified_table_id}`
+        """
+        for row in bigquery.read(sql, as_dict=True):
+            assert row['merged'] == f"{row['name']}-{row['age']}"
+
     finally:
         table.drop()

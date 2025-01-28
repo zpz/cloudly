@@ -410,8 +410,8 @@ class ParquetBatchData(Seq):
         self._data = data
         self.scalar_as_py = True
         """Indicate whether scalar values should be converted to Python types from `pyarrow`_ types."""
-        self.row_to_dict = True
-        """`__getitem__` and `__iter__` produce tuples if `row_to_dict` is `False`; otherwise dicts."""
+        self.row_as_dict = True
+        """`__getitem__` and `__iter__` produce tuples if `row_as_dict` is `False`; otherwise dicts."""
         self.num_rows = data.num_rows
         self.num_columns = data.num_columns
         self.column_names = data.schema.names
@@ -437,7 +437,7 @@ class ParquetBatchData(Seq):
         """
         Get one row (or "record").
 
-        Return a tuple or a dict depending on the value of `self.row_to_dict`.
+        Return a tuple or a dict depending on the value of `self.row_as_dict`.
         The values are converted to Python builtin types if :data:`scalar_as_py`
         is ``True``.
 
@@ -452,7 +452,7 @@ class ParquetBatchData(Seq):
         if idx < 0 or idx >= self.num_rows:
             raise IndexError(idx)
 
-        if self.row_to_dict:
+        if self.row_as_dict:
             z = {col: self._data.column(col)[idx] for col in self.column_names}
             if self.scalar_as_py:
                 return {k: v.as_py() for k, v in z.items()}
@@ -470,14 +470,14 @@ class ParquetBatchData(Seq):
         """
         names = self.column_names
         if self.scalar_as_py:
-            if self.row_to_dict:
+            if self.row_as_dict:
                 for row in zip(*self._data.columns):
                     yield dict(zip(names, (v.as_py() for v in row)))
             else:
                 for row in zip(*self._data.columns):
                     yield tuple(v.as_py() for v in row)
         else:
-            if self.row_to_dict:
+            if self.row_as_dict:
                 for row in zip(*self._data.columns):
                     yield dict(zip(names, row))
             else:
