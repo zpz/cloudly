@@ -5,14 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
-## [0.3.0] - in progress
+## [0.3.2] - 2025-01-28
+
+- `cloudly.gcp.bigquery` finetune.
+
+
+## [0.3.1] - 2025-01-27
+
+- Minor fixes
+
+
+## [0.3.0] - 2025-01-26
 
 - `cloudly.gcp.bigquery._Table` gets new property `labels` and new method `update_labels`.
 - `cloudly.gcp.bigquery` gets new module-level function `table`, analogous to `dataset`.
 - Finetuned and enhanced `cloudly.gcp.bigquery.read_streams` with new parameters `num_workers`, `as_dict`, and `queue_cls`.
 - `cloudly.biglist.parquet.ParquetBatchData` behavior change: the values produced by `__getitem__` and `__iter__` no longer collapse
-  single columns; added attribute `row_to_dict` default to `True`, hence producing dicts by default (as it has been doing up to this release),
-  whereas `row_to_dict=False` would produce tuples.
+  single columns; added attribute `row_as_dict` default to `True`, hence producing dicts by default (as it has been doing up to this release),
+  whereas `row_as_dict=False` would produce tuples.
 - New module `cloudly.gcp.ai_vector_search` (work in progress).
 
 
