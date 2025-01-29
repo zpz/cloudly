@@ -10,6 +10,7 @@ __all__ = [
     'read_to_table',
     'read_streams',
     'QueryJob',
+    'SchemaField',
     'Dataset',
     'Table',
     'ExternalTable',
@@ -92,12 +93,12 @@ class QueryJob:
         self.job_id = job
 
     @property
-    def job(self):
+    def job(self) -> bigquery.QueryJob:
         try:
             return get_client().get_job(self.job_id)
             # It may take some time for this to be available.
-            # If we instantiated `QueryJob` using a just-created job,
-            # we'll fall back to use that job object.
+            # If we instantiated `QueryJob` using a just-created job (instead of a job-id),
+            # we'll fall back to using that job object.
         except google.api_core.exceptions.NotFound as e:
             try:
                 return self._job
@@ -118,7 +119,7 @@ class QueryJob:
         # 'RUNNING', 'DONE', etc
         return self.job.state
 
-    def result(self, *, timeout: float | None = None):
+    def result(self, *, timeout: float | None = None) -> bigquery.RowIterator:
         # This will wait for the job to return result.
         # After it returns a `bigquery.RowIterator` but before the user has iterated over it,
         # simple tests showed `job.state` is 'DONE' and `job.done()` is `True`;
@@ -142,11 +143,9 @@ class QueryJob:
         return self.job.done()
 
 
-Job = QueryJob
-# Alias for back compat since 0.3.2. To be removed in the future.
-
-
-def query(sql: str, *, wait: bool = True, job_config: None | dict = None, **kwargs):
+def query(
+    sql: str, *, wait: bool = True, job_config: None | dict = None, **kwargs
+) -> bigquery.RowIterator | QueryJob:
     """
     Some job config options you may want to know: `use_query_cache` (default `True`), `write_disposition`
     (`Literal['WRITE_APPEND', 'WRITE_TRUNCATE', 'WRITE_EMPTY']`; default 'WRITE_EMPTY').
@@ -162,15 +161,22 @@ def query(sql: str, *, wait: bool = True, job_config: None | dict = None, **kwar
     return job
 
 
-def read_to_table(sql: str, **kwargs) -> Table:
+def read_to_table(sql: str, *, wait: bool = True, **kwargs) -> Table:
     """
     This makes the temporary result table explicitly accessible.
-    If you need more control, then created a table and call `load_from_query`
+    The temporary result table is available for up to 24 hours; see
+
+        https://cloud.google.com/bigquery/docs/cached-results
+
+    If you need more control, create a table and call `load_from_query`
     to populate it, like this::
 
         table = Dataset('tmp').temp_table().load_from_query(sql)
     """
-    return query(sql, wait=False, **kwargs).table
+    job = query(sql, wait=False, **kwargs)
+    if wait:
+        job.result()
+    return job.table
 
 
 def read(sql: str, *, as_dict: bool = False, **kwargs) -> Iterator:

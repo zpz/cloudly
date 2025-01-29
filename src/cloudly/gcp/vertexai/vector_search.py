@@ -23,8 +23,8 @@ from typing_extensions import Self
 from cloudly.upathlib.serializer import NewlineDelimitedOrjsonSeriealizer
 from cloudly.util.datetime import utcnow
 
-from .auth import get_project_id
-from .storage import GcsBlobUpath
+from ..auth import get_project_id
+from ..storage import GcsBlobUpath
 
 logger = logging.getLogger(__name__)
 

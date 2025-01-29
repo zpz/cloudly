@@ -1,6 +1,6 @@
 import pytest
 
-from cloudly.gcp.ai_vector_search import (
+from cloudly.gcp.vertexai.vector_search import (
     Endpoint,
     Index,
     init_global_config,
