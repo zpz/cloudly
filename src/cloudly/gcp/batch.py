@@ -13,7 +13,7 @@ from typing import Literal
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
 
-from .auth import get_credentials, get_project_id, get_service_account_email
+from .auth import get_credentials, get_project_id
 from .compute import (
     basic_resource_labels,
     validate_label_key,
@@ -348,7 +348,7 @@ class JobConfig:
                 network_interfaces=[network],
             ),
             service_account=batch_v1.ServiceAccount(
-                email=get_service_account_email(),
+                # email=get_service_account_email(),
             ),
             **kwargs,
         )

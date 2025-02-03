@@ -143,7 +143,7 @@ def get_credentials(
     if return_state:
         return credentials, renewed
     return credentials
-    # This object has attributes "token", "expiry", and ""
+    # This object has attributes "token", "expiry".
 
 
 def get_service_account_email() -> str:

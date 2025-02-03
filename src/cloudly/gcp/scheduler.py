@@ -5,7 +5,7 @@ from typing import Literal
 
 from google.cloud import scheduler_v1
 
-from .auth import get_credentials, get_project_id, get_service_account_email
+from .auth import get_credentials, get_project_id
 from .compute import validate_label_key
 from .workflows import Workflow
 
@@ -48,7 +48,7 @@ class Job:
                 uri=f'https://workflowexecutions.googleapis.com/v1/{workflow.name}/executions',
                 http_method=scheduler_v1.HttpMethod(scheduler_v1.HttpMethod.POST),
                 oauth_token=scheduler_v1.OAuthToken(
-                    service_account_email=get_service_account_email()
+                    # service_account_email=get_service_account_email()
                 ),
                 body=body,
             ),
