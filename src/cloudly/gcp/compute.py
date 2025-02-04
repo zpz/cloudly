@@ -7,7 +7,6 @@ import os
 import string
 import warnings
 from typing import Literal
-from uuid import uuid4
 
 from google.cloud import compute_v1
 
@@ -252,14 +251,12 @@ class InstanceConfig:
         gpu: dict | None = None,
     ):
         """
-        `name` is a "display name". This name must be 1-63 characters long and match the regular
-        expression ``[a-z]([-a-z0-9]*[a-z0-9])?`` which means the
-        first character must be a lowercase letter, and all
-        following characters must be a dash, lowercase letter, or
-        digit, except the last character, which cannot be a dash.
+        `name` is a "display name", but also plays the role of an ID because it must be unique for the project
+        in the specified region.
 
-        Because `name` must be unique for the project in the specified region, a random string
-        is appended to the user-specified value.
+        `name` must be 1-63 characters long and match the regular expression ``[a-z]([-a-z0-9]*[a-z0-9])?``
+        which means the first character must be a lowercase letter, and all following characters must be a dash,
+        lowercase letter, or digit, except the last character, which cannot be a dash.
 
         `zone` is like 'us-west1-a'.
 
@@ -290,7 +287,6 @@ class InstanceConfig:
         There are some restrictions to the label values.
         See https://cloud.google.com/batch/docs/organize-resources-using-labels
         """
-        name = f"{name}-{str(uuid4()).split('-')[0]}"
         validate_label_key(name)
 
         labels = {**basic_resource_labels(), **(labels or {})}

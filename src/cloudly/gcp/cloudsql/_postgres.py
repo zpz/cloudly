@@ -8,6 +8,7 @@ from cloudly.gcp.compute import Instance, InstanceConfig
 
 def set_default_password(master_instance_name: str, username: str, password: str):
     # Set credentials for the default user 'postgres'
+    # TODO: did not work in tests.
     url = f'https://sqladmin.googleapis.com/sql/v1beta4/projects/{get_project_id()}/instances/{master_instance_name}/users?name={username}'
     data = json.dumps({'name': username, 'password': password})
     headers = {
@@ -15,7 +16,7 @@ def set_default_password(master_instance_name: str, username: str, password: str
         'Authorization': f'Bearer {get_credentials().token}',
     }
     resp = requests.put(url, headers=headers, data=data, timeout=60)
-    assert resp.status_code == 200
+    assert resp.status_code == 200, resp.status_code
 
 
 def attach_load_balancer(
