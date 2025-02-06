@@ -56,8 +56,8 @@ gcp = [
     "google-cloud-workflows",
     "requests",
 ]
-cloudsql = [
-    "cloud-sql-python-connector[pg8000]",
+postgres = [
+    "psycopg[binary, pool]",
 ]
 bigquery = [
     "google-cloud-bigquery",

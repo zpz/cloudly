@@ -435,11 +435,13 @@ def _call_client(method: str, *args, **kwargs):
 
 class Job:
     @classmethod
-    def create(cls, name: str, config: JobConfig) -> Job:
+    def create(cls, name: str, config: JobConfig | dict) -> Job:
         """
         There are some restrictions on the form of `name`; see GCP doc for details or `cloudly.gcp.compute`.
         In addition, the batch name must be unique in the project and the region.
         """
+        if not isinstance(config, JobConfig):
+            config = JobConfig(**config)
         validate_label_key(name)
         req = batch_v1.CreateJobRequest(
             parent=f'projects/{get_project_id()}/locations/{config.region}',

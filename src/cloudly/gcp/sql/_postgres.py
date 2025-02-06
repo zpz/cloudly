@@ -1,22 +1,16 @@
-import json
-
-import requests
-
-from cloudly.gcp.auth import get_credentials, get_project_id
 from cloudly.gcp.compute import Instance, InstanceConfig
 
-
-def set_default_password(master_instance_name: str, username: str, password: str):
-    # Set credentials for the default user 'postgres'
-    # TODO: did not work in tests.
-    url = f'https://sqladmin.googleapis.com/sql/v1beta4/projects/{get_project_id()}/instances/{master_instance_name}/users?name={username}'
-    data = json.dumps({'name': username, 'password': password})
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {get_credentials().token}',
-    }
-    resp = requests.put(url, headers=headers, data=data, timeout=60)
-    assert resp.status_code == 200, resp.status_code
+# def set_default_password(master_instance_name: str, username: str, password: str):
+#     # Set credentials for the default user 'postgres'
+#     # TODO: did not work in tests.
+#     url = f'https://sqladmin.googleapis.com/sql/v1beta4/projects/{get_project_id()}/instances/{master_instance_name}/users?name={username}'
+#     data = json.dumps({'name': username, 'password': password})
+#     headers = {
+#         'Content-Type': 'application/json',
+#         'Authorization': f'Bearer {get_credentials().token}',
+#     }
+#     resp = requests.put(url, headers=headers, data=data, timeout=60)
+#     assert resp.status_code == 200, resp.status_code
 
 
 def attach_load_balancer(
@@ -214,7 +208,7 @@ sudo /var/lib/haproxy/cfgupdate.sh {pg_master_instance_name}
             zone=zone,
             network_uri=network_uri,
             subnet_uri=subnet_uri,
-            machine_type=machine_type or 'n4-standard-8',
+            machine_type=machine_type or 'n1-standard-1',
             startup_script=script,
         )
     )

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import concurrent.futures
 import http
+import logging
 import time
 from multiprocessing.util import Finalize
 from typing import Literal
 
+import google.auth
+import psycopg
 from google.api_core.exceptions import NotFound
 from googleapiclient import discovery
 from googleapiclient.errors import HttpError
@@ -19,8 +22,14 @@ from cloudly.gcp.compute import (
 
 from ._postgres import attach_load_balancer
 
+logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.WARNING)
+# Suppress the message "file_cache is only supported with oauth2client<4.0.0"
+
 
 def get_client():
+    # Beware: if you use the returned object "on-the-fly" in one line of code, then in subsequent lines
+    # this object may have been closed; if you call `.execute()` in subsequent lines, that call may still
+    # need the connection.
     client = discovery.build('sqladmin', 'v1beta4')
     Finalize(client, client._http.close)
     return client
@@ -28,27 +37,27 @@ def get_client():
 
 def _wait_on_operation(name, *, timeout: float = 600):
     t0 = time.perf_counter()
+    client = get_client()
     while True:
         try:
             op = (
-                get_client()
-                .operations()
+                client.operations()
                 .get(project=get_project_id(), operation=name)
                 .execute()
             )
-        except http.client.CannotSendHeader:
-            # google.auth.exceptions.TransportError:
+        except (http.client.CannotSendHeader, google.auth.exceptions.TransportError):
             # It seems this happens when the op is done (and maybe gone?), but not sure.
             break
         if op['status'] == 'DONE':
             break
+        print(f"waiting on operation '{name}'; current state: {op['status']}")
         t1 = time.perf_counter()
         if t1 - t0 >= timeout:
             raise concurrent.futures.TimeoutError(f'{t1 - t0} seconds')
-        time.sleep(2)
+        time.sleep(5)
 
 
-class Instance:
+class PostgresInstance:
     """
     This is a CloudSQL "instance". It may be a single node or a "master" node with one or more read replicas.
     """
@@ -114,21 +123,26 @@ class Instance:
                 },
             },
         }
-        req = get_client().instances().insert(project=get_project_id(), body=config)
-        op = req.execute()
+        op = (
+            get_client()
+            .instances()
+            .insert(project=get_project_id(), body=config)
+            .execute()
+        )
         _wait_on_operation(op['name'])
         return instance_name
 
     @classmethod
-    def _delete(cls, instance_name: str) -> None:
-        req = (
-            get_client()
-            .instances()
-            .delete(project=get_project_id(), instance=instance_name)
+    def _delete(cls, instance_name: str, *, wait: bool = True) -> str:
+        client = get_client()
+        req = client.instances().delete(
+            project=get_project_id(), instance=instance_name
         )
         try:
             op = req.execute()
-            _wait_on_operation(op['name'])
+            if wait:
+                _wait_on_operation(op['name'])
+            return op['name']
         except HttpError as e:
             if e.error_details[0]['reason'] == 'instanceDoesNotExist':
                 raise NotFound(f"instance '{instance_name}' does not exist") from e
@@ -136,11 +150,8 @@ class Instance:
 
     @classmethod
     def _get(cls, instance_name: str) -> dict:
-        req = (
-            get_client()
-            .instances()
-            .get(project=get_project_id(), instance=instance_name)
-        )
+        client = get_client()
+        req = client.instances().get(project=get_project_id(), instance=instance_name)
         try:
             return req.execute()
         except HttpError as e:
@@ -159,6 +170,7 @@ class Instance:
         # subnet_uri: str | None = None,
         postgres_version: str = '16',
         num_read_replicas: int = 0,
+        load_balancer_machine_type: str | None = None,
         **kwargs,
     ):
         """
@@ -173,9 +185,18 @@ class Instance:
             root_password=root_password,
             **kwargs,
         )
-        # set_default_password(master_instance_name, username, password)
 
         if num_read_replicas:
+            master = cls(master_instance_name)
+            t0 = time.perf_counter()
+            while (state := master.state()) != 'RUNNABLE':
+                if time.perf_counter() - t0 > 600:
+                    raise concurrent.futures.TimeoutError(
+                        f"timed out waiting for instance '{master_instance_name}' to be RUNNABLE"
+                    )
+                print('waiting for master instance; current state:', state)
+                time.sleep(5)
+
             for idx in range(num_read_replicas):
                 cls._create(
                     f'{name}-replica-{idx + 1}',
@@ -184,15 +205,22 @@ class Instance:
                     region=region,
                     **kwargs,
                 )
-            attach_load_balancer(master_instance_name, zone=f'{region}-a')
+            attach_load_balancer(
+                master_instance_name,
+                postgres_version=postgres_version,
+                zone=f'{region}-a',
+                machine_type=load_balancer_machine_type,
+            )
 
         return cls(master_instance_name)
 
+        # TODO: add read replica on-demand to an existing instance?
+        # Similarly, can we remove read replica dynamically?
+
     @classmethod
-    def list(cls) -> list[Instance]:
-        req = get_client().instances().list(project=get_project_id())
-        rep = req.execute()
-        return [cls(item['name']) for item in rep['items']]
+    def list(cls) -> list[PostgresInstance]:
+        resp = get_client().instances().list(project=get_project_id()).execute()
+        return [cls(item['name']) for item in resp['items']]
 
     def __init__(self, name: str):
         self.name = name
@@ -219,9 +247,33 @@ class Instance:
         return self._get(self.name)
 
     def state(self) -> str:
+        # 'PENDING', 'RUNNABLE', etc
         return self.instance['state']
 
     def delete(self) -> None:
         for name in self.replica_names:
-            self._delete(name)
-        self._delete(self.name)
+            self._delete(name, wait=False)
+        replicas = self.replica_names
+        t0 = time.perf_counter()
+        while replicas:
+            if time.perf_counter() - t0 > 600:
+                raise concurrent.futures.TimeoutError(
+                    'timed out waiting for deletion of replicas'
+                )
+            print(f'waiting for deletion of replicas: {replicas}')
+            time.sleep(5)
+            replicas = self.instance.get('replicaNames')
+        t0 = time.perf_counter()
+        while True:
+            try:
+                self._delete(self.name)
+                break
+            except HttpError as e:
+                if 'because another operation was already in progress' in str(e):
+                    if time.perf_counter() - t0 > 600:
+                        raise concurrent.futures.TimeoutError(
+                            f"timed out waiting for deletion of master node '{self.name}'"
+                        )
+                    time.sleep(2)
+                else:
+                    raise

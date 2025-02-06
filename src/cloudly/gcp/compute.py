@@ -390,7 +390,9 @@ def _call_client(method: str, *args, **kwargs):
 
 class Instance:
     @classmethod
-    def create(cls, config: InstanceConfig) -> Instance:
+    def create(cls, config: InstanceConfig | dict) -> Instance:
+        if not isinstance(config, InstanceConfig):
+            config = InstanceConfig(**config)
         req = compute_v1.InsertInstanceRequest(
             project=get_project_id(),
             zone=config.zone,
