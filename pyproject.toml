@@ -59,6 +59,9 @@ gcp = [
 postgres = [
     "psycopg[binary, pool]",
 ]
+cloudsql = [
+    "cloud-sql-python-connector[pg8000]",
+]
 bigquery = [
     "google-cloud-bigquery",
     "google-cloud-bigquery-storage",
