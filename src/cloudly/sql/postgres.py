@@ -24,6 +24,7 @@ __all__ = [
 ]
 
 
+import functools
 from collections.abc import Sequence
 from typing import Literal
 
@@ -205,9 +206,7 @@ class Table:
                 )
             index_name = f'{self.table_name}_{vector_col}_vector'
 
-        sql = f"""\
-            CREATE INDEX {index_name} ON {self.table_name} USING {index_type} ({vector_col} vector_{distance_metric}_ops)
-            """
+        sql = f"""CREATE INDEX {index_name} ON {self.table_name} USING {index_type} ({vector_col} vector_{distance_metric}_ops)"""
         if index_type == 'ivfflat':
             sql = f"{sql} WITH (lists = {index_opts.get('lists', 100)})"
         else:
@@ -217,6 +216,30 @@ class Table:
             sql = f'{sql} WHERE {partial_index_condition}'
         self._conn.execute(sql)
         return index_name
+
+    @functools.cache
+    def vector_index_info(self, index_name: str) -> dict:
+        indexdef = self._conn.execute(
+            f'SELECT indexdef FROM pg_indexes WHERE tablename = {self.table_name} AND indexname = {index_name}'
+        ).fetchone()[0]
+        assert indexdef.startswith(f'CREATE INDEX {index_name} ON {self.table_name}')
+        sub = indexdef.split(' USING ')[1].split(' ', 1)[1]
+        vector_col, sub = sub.split(' ', 1)
+        vector_col = vector_col[1:]  # remove '('
+        distance_metric, sub = sub.split(' ', 1)
+        distance_metric = distance_metric.split('_')[1]
+        ss = sub.split(' WHERE ')
+        if len(ss) > 1:
+            partial_index_condition = ss[1]
+        else:
+            partial_index_condition = None
+        return {
+            'name': index_name,
+            'def': indexdef,
+            'vector_col': vector_col,
+            'distance_metric': distance_metric,
+            'partial_index_condition': partial_index_condition,
+        }
 
     def drop_vector_index(self, index_name: str, *, not_found_ok: bool = False) -> None:
         try:
@@ -234,16 +257,33 @@ class Table:
         """
         self._conn.execute(f'REINDEX INDEX {index_name}')
 
-    def vector_distance_sql(
+    def vector_distance_subquery(
         self,
         query: list[float],
-        *,
         vector_index_name: str,
+        *,
         distance_name: str = 'distance',
     ):
-        indexdef = self._conn.execute(
-            f'SELECT indexdef FROM pg_indexes WHERE tablename = {self.table_name} AND indexname = {vector_index_name}'
-        ).fetchone()[0]
-        # This is the SQL statement used in `create_vector_index`.
-        # TODO: parse out info from the def string.
-        print(indexdef)
+        """
+        Construct a SQL segment that includes calculation of distance using the specified vector index.
+        This segment is to be used as part of a larger SQL statement. For example,
+
+            subquery = table.vector_distance_subquery([1.2, 2.3, 3.4, 4.5], 'my_vector_index')
+            sql = f'''
+                SELECT col_a, col_b, distance
+                FROM {subquery}
+                WHERE distance < 3.1
+                ORDER BY distance
+                LIMIT 10
+            '''
+        """
+        index_info = self.vector_index_info(vector_index_name)
+        distance_op = {
+            'l2': '<->',
+            'cosine': '<=>',
+        }[index_info['distance_metric']]
+        dist = f"{index_info['vector_col']} {distance_op} '{str(query)}'"
+        sql = f'SELECT *, {dist} AS {distance_name} FROM {self.table_name}'
+        if index_info.get('partial_index_condition'):
+            sql = f"{sql} WHERE {index_info['partial_index_condition']}"
+        return sql
