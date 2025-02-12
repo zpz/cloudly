@@ -301,11 +301,11 @@ class Connection(pg8000.Connection):
 
 
 class Cursor(pg8000.Cursor):
-    def execute(self, sql):
+    def execute(self, sql, *args):
         """
         `pg800.Cursor.execute` returns None.
         """
-        super().execute(sql)
+        super().execute(sql, args)
         return self
 
 
@@ -313,14 +313,16 @@ def connect(
     *, connection_name: str, user: str = 'postgres', password: str, db: str = 'postgres'
 ) -> pg8000.Connection:
     """
-    This is a temporary solution.curs
+    This is a temporary solution.
 
     First, I'm waiting for Google's 'connector' package to support `psycopg`
     (which they say is in the works, see https://github.com/GoogleCloudPlatform/cloud-sql-python-connector/issues/219).
-    Once that's in place, I intend to switch from `pg8000` to `psycopg`.
+    Once that's in place, I plan to switch from `pg8000` to `psycopg`.
 
-    Second, I haven't figured out all the GCP authentication stuff. For my code development, I'm using a "public IP" for the instance.
-    This choice is hardcoded in this function.
+    Second, I haven't figured out all the GCP authentication stuff. I could not make `psycopg.connect` work with "username" and "password",
+    and found this `google.cloud.sql.connector` to work out of the box (with much relief).
+    If you have made `psycopg.connect` work, then you don't need to use this function.
+    You can use a `psycopg.Connection` with the utilities in `cloudly.sql.postgres`.
     """
     connector = Connector(IPTypes.PUBLIC)
     conn = connector.connect(

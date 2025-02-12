@@ -46,6 +46,20 @@ ConnectionPool = psycopg_pool.ConnectionPool
 #   https://cloud.google.com/blog/products/databases/using-pgvector-llms-and-langchain-with-google-cloud-databases
 
 
+def _execute(conn: Connection | Cursor, sql: str, *args, **kwargs):
+    try:
+        cursor = conn.execute(sql, *args, **kwargs)
+        return cursor
+    except:
+        print()
+        print('SQL:')
+        print(sql)
+        print()
+        print('args', args)
+        print('kwargs:', kwargs)
+        raise
+
+
 def enable_pgvector(conn: Connection | Cursor) -> None:
     """
     This "installs" the pgvector extension on the instance.
@@ -76,10 +90,13 @@ class Database:
         self._conn = conn
 
     def list_tables(self) -> list[str]:
-        cursor = self._conn.execute("""\
+        cursor = _execute(
+            self._conn,
+            """\
             SELECT table_name 
             FROM information_schema.tables
-            WHERE table_schema='public' AND table_type='BASE TABLE'""")
+            WHERE table_schema='public' AND table_type='BASE TABLE'""",
+        )
         return sorted(row[0] for row in cursor.fetchall())
 
     def table(self, table_name: str) -> Table:
@@ -98,12 +115,20 @@ class Table:
         return self.__repr__()
 
     def exists(self) -> bool:
-        cursor = self._conn.execute(
-            f"SELECT EXISTS (SELECT FROM pg_tables WHERE tablename = '{self.table_name}')"
+        cursor = _execute(
+            self._conn,
+            f"SELECT EXISTS (SELECT FROM pg_tables WHERE tablename = '{self.table_name}')",
         )
         return cursor.fetchone()[0]
 
     def drop(self, *, not_found_ok: bool = False) -> None:
+        # After `drop`, if you want to re-use the table name and create it again,
+        # you need to use a separate `connection.execute("...")` or `cursor.execute("...")`
+        # statement. Then you could continue to use the current object because it still
+        # has the correct table name.
+        # Before re-creating the table, the current object is not very useful, hence
+        # `drop` and `drop_if_exists` does not return `self`.
+        # (Returning `self` is mainly facilitating "chained" usage.)
         sql = f'DROP TABLE {self.table_name}'
         try:
             self._conn.execute(sql)
@@ -116,29 +141,28 @@ class Table:
                 return self
             raise
         except Exception:
-            print('SQL:')
+            print()
             print(sql)
+            print()
             raise
-        return self
 
     def drop_if_exists(self) -> None:
         self.drop(not_found_ok=True)
 
     def count_rows(self) -> int:
-        cursor = self._conn.execute(f"SELECT COUNT(*) FROM '{self.table_name}'")
+        cursor = _execute(self._conn, f'SELECT COUNT(*) FROM {self.table_name}')
         return cursor.fetchone()[0]
 
     @property
     def column_names(self) -> list[str]:
-        cursor = self._conn.execute(
-            f"SELECT column_name FROM information_schema.columns WHERE table_name = '{self.table_name}'"
-        )
+        sql = f"SELECT column_name FROM information_schema.columns WHERE table_name = '{self.table_name}'"
+        cursor = _execute(self._conn, sql)
         return [row[0] for row in cursor.fetchall()]
 
     @property
     def primary_keys(self) -> list[str]:
         sql = f"""\
-            SELECT a.attname
+            SELECT b.attname
             FROM pg_index a
             JOIN pg_attribute b
                 ON b.attrelid = a.indrelid
@@ -146,7 +170,7 @@ class Table:
             WHERE a.indrelid = '{self.table_name}'::regclass
                 AND a.indisprimary
         """
-        cursor = self._conn.execute(sql)
+        cursor = _execute(self._conn, sql)
         return [row[0] for row in cursor.fetchall()]
 
     def insert_rows(self, data: Sequence[tuple], *, overwirte: bool = False) -> None:
@@ -163,11 +187,11 @@ class Table:
             """
         else:
             sql = f'INSERT INTO {self.table_name} VALUES {template}'
-        self._conn.execute(sql, sum(data, ()))
+        _execute(self._conn, sql, tuple(v for row in data for v in row))
 
     def list_vector_indexes(self) -> list[str]:
         sql = f"SELECT indexname FROM pg_indexes WHERE tablename = '{self.table_name}'"
-        cursor = self._conn.execute(sql)
+        cursor = _execute(self._conn, sql)
         return sorted(row[0] for row in cursor.fetchall())
 
     def create_vector_index(
@@ -214,7 +238,7 @@ class Table:
             sql = f"{sql} WITH (ef_construction={index_opts.get('ef_construction', 64)}, m={index_opts.get('m', 16)})"
         if partial_index_condition:
             sql = f'{sql} WHERE {partial_index_condition}'
-        self._conn.execute(sql)
+        _execute(self._conn, sql)
         return index_name
 
     @functools.cache
