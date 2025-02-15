@@ -159,7 +159,7 @@ class BiglistFileReader(FileReader[Element]):
         loader
             A function that will be used to load the data file.
             This must be pickle-able.
-            Usually this is the bound method ``load`` of  a subclass of :class:`cloudly.upathlib.Serializer`.
+            Usually this is the bound method ``load`` of  a subclass of :class:`cloudly.util.serializer.Serializer`.
             If you customize this, please see the doc of :class:`~biglist.FileReader`.
         """
         super().__init__()

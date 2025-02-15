@@ -2,4 +2,4 @@
 Serializer
 **********
 
-.. automodule:: cloudly.upathlib.serializer
+.. automodule:: cloudly.util.serializer

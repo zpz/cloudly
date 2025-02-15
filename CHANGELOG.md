@@ -5,9 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.3.4] - 2025-02-15
+
+- New module `cloudly.gcp.sql.postgres` (preliminary).
+- New module `cloudly.gcp.vertexai.vector_search` (preliminary).
+
+
 ## [0.3.2] - 2025-01-28
 
-- `cloudly.gcp.bigquery` finetune.
+- `cloudly.gcp.bigquery` fine-tune.
 
 
 ## [0.3.1] - 2025-01-27

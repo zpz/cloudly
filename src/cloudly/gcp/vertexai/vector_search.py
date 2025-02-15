@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 __all__ = [
-    'init_global_config',
     'make_datapoint',
     'make_batch_update_record',
     'Index',
+    'StreamIndex',
+    'BatchIndex',
     'Endpoint',
     'DeployedIndex',
     'IndexDatapoint',
@@ -12,6 +13,7 @@ __all__ = [
 
 import functools
 import logging
+import time
 from collections.abc import Sequence
 from typing import Any, Literal
 from uuid import uuid4
@@ -20,10 +22,9 @@ from google.cloud import aiplatform
 from google.cloud.aiplatform import matching_engine
 from typing_extensions import Self
 
-from cloudly.upathlib.serializer import NewlineDelimitedOrjsonSeriealizer
 from cloudly.util.datetime import utcnow
+from cloudly.util.serializer import NewlineDelimitedOrjsonSeriealizer
 
-from ..auth import get_project_id
 from ..storage import GcsBlobUpath
 
 logger = logging.getLogger(__name__)
@@ -33,17 +34,6 @@ Namespace = matching_engine.matching_engine_index_endpoint.Namespace
 NumericNamespace = matching_engine.matching_engine_index_endpoint.NumericNamespace
 MatchingEngineIndex = matching_engine.MatchingEngineIndex
 MatchingEngineIndexEndpoint = matching_engine.MatchingEngineIndexEndpoint
-
-
-def init_global_config(region: str):
-    """
-    Call this function once before using :class:`Index` and :class:`Endpoint`.
-    The `project` and `region` used in this call will be used in other
-    functions of this module where applicable.
-
-    `region` is like 'us-west1'.
-    """
-    aiplatform.init(project=get_project_id(), location=region)
 
 
 def make_datapoint(
@@ -104,43 +94,18 @@ class Index:
     """
     The class `Index` is responsible for storing and managing (add/delete/update) data,
     as well as maintaining the "index" to facilitate similarity search.
-    """
 
-    @classmethod
-    def new(
-        cls,
-        display_name: str,
-        *,
-        dimensions: int,
-        brute_force: bool = False,
-        approximate_neighbors_count: int | None = None,
-        index_update_method: Literal['STREAM_UPDATE', 'BATCH_UPDATE'] = 'BATCH_UPDATE',
-        **kwargs,
-    ) -> Index:
-        if not brute_force:
-            assert approximate_neighbors_count
-            index = MatchingEngineIndex.create_tree_ah_index(
-                display_name=display_name,
-                dimensions=dimensions,
-                approximate_neighbors_count=approximate_neighbors_count,
-                index_update_method=index_update_method,
-                **kwargs,
-            )
-        else:
-            assert approximate_neighbors_count is None
-            index = MatchingEngineIndex.create_brute_force_index(
-                display_name=display_name,
-                dimensions=dimensions,
-                index_update_method=index_update_method,
-                **kwargs,
-            )
-        return cls(index.resource_name)
+    This base class does not have methods for adding data to the index.
+    Usually user should use a subclass, either `StreamIndex` or `BatchIndex`.
+    """
 
     def __init__(self, name: str):
         """
         `name` is either a fully qualified "resource name"
-        (like 'projects/166..../locations/us-west1/indexes/1234567890')
+        (like 'projects/my-project-id/locations/us-west1/indexes/1234567890')
         or ID (like '1234567890', shown on GCP dashboard).
+
+        If it's ID, then `init_global_config` must have been called with the correct `region` value.
         """
         self.name = name
         self._display_name = None
@@ -196,10 +161,74 @@ class Index:
         # Number of datapoints in the index.
         # TODO: why could this return `None`?
         # TODO: is `__len__` suitable if the return value can be `None`?
-        n = self.index.to_dict()['indexStats'].get('vectorsCount')
-        if n is None:
-            return n
+        while True:
+            n = self.index.to_dict()['indexStats'].get('vectorsCount')
+            if n is not None:
+                break
+            time.sleep(0.1)
         return int(n)
+
+    def remove_datapoints(self, datapoint_ids: Sequence[str]) -> Self:
+        self.index.remove_datapoints(datapoint_ids)
+        return self
+
+    def deploy(self, endpoint_name: str, **kwargs) -> DeployedIndex:
+        return Endpoint(endpoint_name).deploy_index(self, **kwargs)
+
+    @property
+    def deployed_indexes(self) -> list[dict]:
+        return [
+            {
+                'endpoint_name': di.index_endpoint,  # resource_name
+                'deployed_index_id': di.deployed_index_id,
+                'display_name': di.display_name,
+            }
+            for di in self.index.deployed_indexes
+        ]
+
+    def undeploy(self, endpoint_name: str, deployed_index_id: str) -> None:
+        Endpoint(endpoint_name).undeploy_index(deployed_index_id)
+
+    def undeploy_all(self) -> None:
+        for zz in self.deployed_indexes:
+            self.undeploy(zz['endpoint_name'], zz['deployed_index_id'])
+
+    def delete(self) -> None:
+        """
+        Delete this index (permanently).
+        """
+        self.index.delete()
+
+
+class StreamIndex(Index):
+    @classmethod
+    def new(
+        cls,
+        display_name: str,
+        *,
+        dimensions: int,
+        brute_force: bool = False,
+        approximate_neighbors_count: int | None = None,
+        **kwargs,
+    ) -> Index:
+        if not brute_force:
+            assert approximate_neighbors_count
+            index = MatchingEngineIndex.create_tree_ah_index(
+                display_name=display_name,
+                dimensions=dimensions,
+                approximate_neighbors_count=approximate_neighbors_count,
+                index_update_method='STREAM_UPDATE',
+                **kwargs,
+            )
+        else:
+            assert approximate_neighbors_count is None
+            index = MatchingEngineIndex.create_brute_force_index(
+                display_name=display_name,
+                dimensions=dimensions,
+                index_update_method='STREAM_UPDATE',
+                **kwargs,
+            )
+        return cls(index.resource_name)
 
     def upsert_datapoints(self, datapoints: Sequence[IndexDatapoint], **kwargs) -> Self:
         """
@@ -209,7 +238,37 @@ class Index:
         self.index.upsert_datapoints(datapoints, **kwargs)
         return self
 
-    # TODO: this is not working
+
+class BatchIndex(Index):
+    @classmethod
+    def new(
+        cls,
+        display_name: str,
+        *,
+        dimensions: int,
+        brute_force: bool = False,
+        approximate_neighbors_count: int | None = None,
+        **kwargs,
+    ) -> Index:
+        if not brute_force:
+            assert approximate_neighbors_count
+            index = MatchingEngineIndex.create_tree_ah_index(
+                display_name=display_name,
+                dimensions=dimensions,
+                approximate_neighbors_count=approximate_neighbors_count,
+                index_update_method='BATCH_UPDATE',
+                **kwargs,
+            )
+        else:
+            assert approximate_neighbors_count is None
+            index = MatchingEngineIndex.create_brute_force_index(
+                display_name=display_name,
+                dimensions=dimensions,
+                index_update_method='BATCH_UPDATE',
+                **kwargs,
+            )
+        return cls(index.resource_name)
+
     def batch_update_datapoints(
         self,
         datapoints: Sequence[IndexDatapoint],
@@ -259,7 +318,6 @@ class Index:
         file.parent.rmrf()
         return self
 
-    # TODO: this is not working
     def batch_update_from_uri(
         self, uri: str, *, is_complete_overwrite: bool = None, **kwargs
     ) -> Self:
@@ -273,44 +331,12 @@ class Index:
           https://cloud.google.com/vertex-ai/docs/vector-search/setup/format-structure
         """
         assert uri.startswith('gs://')
-        print('uri', uri)
         self.index.update_embeddings(
             contents_delta_uri=uri,
             is_complete_overwrite=is_complete_overwrite,
             **kwargs,
         )
         return self
-
-    def remove_datapoints(self, datapoint_ids: Sequence[str]) -> Self:
-        self.index.remove_datapoints(datapoint_ids)
-        return self
-
-    def deploy(self, endpoint_name: str, **kwargs) -> DeployedIndex:
-        return Endpoint(endpoint_name).deploy_index(self, **kwargs)
-
-    @property
-    def deployed_indexes(self) -> list[dict]:
-        return [
-            {
-                'endpoint_name': di.index_endpoint,  # resource_name
-                'deployed_index_id': di.deployed_index_id,
-                'display_name': di.display_name,
-            }
-            for di in self.index.deployed_indexes
-        ]
-
-    def undeploy(self, endpoint_name: str, deployed_index_id: str) -> None:
-        Endpoint(endpoint_name).undeploy_index(deployed_index_id)
-
-    def undeploy_all(self) -> None:
-        for zz in self.deployed_indexes:
-            self.undeploy(zz['endpoint_name'], zz['deployed_index_id'])
-
-    def delete(self) -> None:
-        """
-        Delete this index (permanently).
-        """
-        self.index.delete()
 
 
 class Endpoint:
@@ -336,7 +362,10 @@ class Endpoint:
     def __init__(self, name: str):
         """
         `name` is either a fully qualified "resource_name"
+        (like 'projects/my-project-number/locations/us-west1/indexEndpoints/1234567890')
         or ID (like '1234567890', shown on GCP dashboard).
+
+        If it's ID, then `init_global_config` must have been called with the correct `region` value.
         """
         self.name = name
         self._display_name = None
@@ -473,6 +502,10 @@ class DeployedIndex:
     """
 
     def __init__(self, endpoint_name: str, deployed_index_id: str):
+        """
+        `endpoint_name` is either the fully qualified "resource name"
+        or the ID (if `init_global_config` has been called with the correct `region` value).
+        """
         self.endpoint_name = endpoint_name
         self.deployed_index_id = deployed_index_id
 
@@ -538,8 +571,8 @@ class DeployedIndex:
                 )
                 for f in numeric_filter
             ]
-        resp = self.endpoint.find_neighbors(
-            deployed__index_id=self.deployed_index_id,
+        resp = self.endpoint.endpoint.find_neighbors(
+            deployed_index_id=self.deployed_index_id,
             queries=queries,
             embedding_ids=ids,
             num_neighbors=num_neighbors,
@@ -566,7 +599,7 @@ class DeployedIndex:
         """
         Retrieve datapoints with the specified IDs.
         """
-        return self.endpoint.read_index_datapoints(
+        return self.endpoint.endpoint.read_index_datapoints(
             deployed_index_id=self.deployed_index_id, ids=ids
         )
 
@@ -591,5 +624,5 @@ class DeployedIndex:
             **kwargs,
         )
         if neighbors:
-            return [n['datapoint_id'] for n in neighbors]
+            return [n['datapoint_id'] for n in neighbors[0]]
         return []

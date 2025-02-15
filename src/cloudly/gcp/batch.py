@@ -13,7 +13,7 @@ from typing import Literal
 from google.cloud import batch_v1
 from google.protobuf.duration_pb2 import Duration
 
-from .auth import get_credentials, get_project_id, get_service_account_email
+from .auth import get_credentials, get_project_id
 from .compute import (
     basic_resource_labels,
     validate_label_key,
@@ -280,10 +280,10 @@ class JobConfig:
         *,
         region: str,
         labels: dict,
-        network_uri: str,
-        subnet_uri: str,
+        network_uri: str | None = None,
+        subnet_uri: str | None = None,
         machine_type: str,
-        no_external_ip_address: bool = True,
+        no_external_ip_address: bool = False,
         provisioning_model: Literal['standard', 'spot', 'preemptible'] = 'standard',
         boot_disk: dict | None = None,
         gpu: GPU | None = None,
@@ -296,10 +296,13 @@ class JobConfig:
         ----------
         region
             Like 'us-central1', 'us-west1', etc.
-        network_uri
-            Could be like this: 'projects/shared-vpc-admin/global/networks/vpcnet-shared-prod-01'.
-        subnet_uri
-            Could be like this: 'https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01'
+        network_uri, subnet_uri
+            If missing and `no_external_ip_address` is `False`, the default for the project in the specified region will be used.
+
+            If `no_external_ip_address` is `True`, then both must be provided.
+
+            See https://cloud.google.com/compute/docs/networking/network-overview
+            and `google.cloud.batch_v1.types.job.AllocationPolicy.NetworkInterface`.
         labels, gpu, local_ssd_disk
             These are provided by `JobConfig.__init__`. User should not provide them directly.
         """
@@ -348,7 +351,7 @@ class JobConfig:
                 network_interfaces=[network],
             ),
             service_account=batch_v1.ServiceAccount(
-                email=get_service_account_email(),
+                # email=get_service_account_email(),
             ),
             **kwargs,
         )
@@ -432,12 +435,13 @@ def _call_client(method: str, *args, **kwargs):
 
 class Job:
     @classmethod
-    def create(cls, name: str, config: JobConfig) -> Job:
+    def create(cls, name: str, config: JobConfig | dict) -> Job:
         """
-        There are some restrictions on the form of `name`; see GCP doc for details.
-        In addition, the batch name must be unique. For this reason, user may want to construct the name
-        with some randomness.
+        There are some restrictions on the form of `name`; see GCP doc for details or `cloudly.gcp.compute`.
+        In addition, the batch name must be unique in the project and the region.
         """
+        if not isinstance(config, JobConfig):
+            config = JobConfig(**config)
         validate_label_key(name)
         req = batch_v1.CreateJobRequest(
             parent=f'projects/{get_project_id()}/locations/{config.region}',
@@ -461,7 +465,7 @@ class Job:
         This can also be considered the job "ID" or "URI".
         This is available from the object returned by :meth:`create`.
 
-        `job` is not needed because it can be created if needed.
+        `job` is not necessary because it can be created if needed.
         It is accepted in case you already have it. See :meth:`create`, :meth:`list`.
         """
         if isinstance(name_or_obj, str):

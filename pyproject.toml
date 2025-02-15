@@ -56,12 +56,19 @@ gcp = [
     "google-cloud-workflows",
     "requests",
 ]
+postgres = [
+    "psycopg[binary, pool]",
+]
+cloudsql = [
+    "cloud-sql-python-connector[pg8000]",
+]
 bigquery = [
     "google-cloud-bigquery",
     "google-cloud-bigquery-storage",
 ]
 vertexai = [
     "google-cloud-aiplatform",
+    "google-cloud-resource-manager",
 ]
 test = [
     "pytest-asyncio",

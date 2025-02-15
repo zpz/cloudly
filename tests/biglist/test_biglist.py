@@ -30,8 +30,8 @@ from cloudly.biglist.parquet import (
     write_arrays_to_parquet,
 )
 from cloudly.upathlib import LocalUpath
-from cloudly.upathlib.serializer import ParquetSerializer
 from cloudly.util.seq import Slicer
+from cloudly.util.serializer import ParquetSerializer
 
 
 def test_custom_file_name():

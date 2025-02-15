@@ -12,7 +12,7 @@ from google.cloud import compute_v1
 
 from cloudly.util.logging import get_calling_file
 
-from .auth import get_credentials, get_project_id, get_service_account_email
+from .auth import get_credentials, get_project_id
 
 
 def validate_label_key(val: str) -> str:
@@ -245,14 +245,40 @@ class InstanceConfig:
         labels: dict[str, str] | None = None,
         boot_disk: dict | None = None,
         local_ssd: dict | None = None,
-        network_uri: str,
-        subnet_uri: str,
+        network_uri: str = None,
+        subnet_uri: str = None,
         startup_script: str | None = None,
         gpu: dict | None = None,
     ):
         """
+        `name` is a "display name", but also plays the role of an ID because it must be unique for the project
+        in the specified region.
+
+        `name` must be 1-63 characters long and match the regular expression ``[a-z]([-a-z0-9]*[a-z0-9])?``
+        which means the first character must be a lowercase letter, and all following characters must be a dash,
+        lowercase letter, or digit, except the last character, which cannot be a dash.
+
+        `zone` is like 'us-west1-a'.
+
+        `machine_type`: cheap, low-end machines suitable for lightweights tests:
+
+            't2a-standard-1' (1 CPU 4 GiB, $0.0385 / hour)
+            't2d-standard-1' (1 CPU 4 GiB, $0.0422 / hour)
+            'c4a-standard-1' (1 CPU 4 GiB, $0.0449 / hour)
+            'n1-standard-1' (1 CPU 3.75 GiB, $0.0475 / hour)
+            'e2-standard-2' (2 CPUs 8 GiB, $0.067 / hour)
+            'n2d-standard-2' (2 CPUs 8 GiB, $0.084 / hour)
+            'n4-standard-2' (2 CPUs 8 GiB, $0.0948 / hour)
+            'n2-standard-2' (2 CPUs 8 GiB, $0.097 / hour)
+            'e2-standard-4' (4 CPUs 16 GiB, $0.134 / hour)
+            'e2-standard-8' (8 CPUs 32 GiB, $0.27 / hour)
+
+        See https://cloud.google.com/compute/all-pricing?hl=en
+
         `network_uri` may look like "projects/shared-vpc-admin/global/networks/vpcnet-shared-prod-01".
         `subnet_uri` may look like "https://www.googleapis.com/compute/v1/projects/shared-vpc-admin/regions/<region>/subnetworks/prod-<region>-01".
+        If `None`, the project's default network and subnet (for the specified region) will be used.
+        See https://cloud.google.com/compute/docs/networking/network-overview
 
         `startup_script`: shell script that installs software and makes any other preps before the instance becomes operational.
         If provided, this must handle everything, as the script will not be augmented in this function.
@@ -326,7 +352,6 @@ class InstanceConfig:
 
         service_accounts = [
             compute_v1.ServiceAccount(
-                email=get_service_account_email(),
                 scopes=['https://www.googleapis.com/auth/cloud-platform'],
             ),
         ]
@@ -363,7 +388,9 @@ def _call_client(method: str, *args, **kwargs):
 
 class Instance:
     @classmethod
-    def create(cls, config: InstanceConfig) -> Instance:
+    def create(cls, config: InstanceConfig | dict) -> Instance:
+        if not isinstance(config, InstanceConfig):
+            config = InstanceConfig(**config)
         req = compute_v1.InsertInstanceRequest(
             project=get_project_id(),
             zone=config.zone,
@@ -381,6 +408,9 @@ class Instance:
         return [cls(r.name, zone) for r in resp]
 
     def __init__(self, name: str, zone: str):
+        """
+        `name` is either the "Name" or "Instance Id" shown on GCP dashboard.
+        """
         self.name = name
         self.zone = zone
         self.instance = None
@@ -399,6 +429,10 @@ class Instance:
         self.instance = _call_client('get', req)
         # This could raise `google.api_core.exceptions.NotFound`
         return self
+
+    @property
+    def id(self) -> int:
+        return self.instance.id
 
     @property
     def machine_type(self) -> str:
