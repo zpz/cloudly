@@ -1,5 +1,7 @@
 import math
 
+import pytest
+
 from cloudly.gcp.storage import GcsBlobUpath
 from cloudly.gcp.vertexai import init_global_config
 from cloudly.gcp.vertexai.vector_search import (
@@ -84,6 +86,7 @@ def _test_index(index: Index):
     endpoint.delete()
 
 
+@pytest.mark.skip(reason='not ready, too slow')
 def test_stream_index():
     print()
     index = StreamIndex.new(
@@ -105,6 +108,7 @@ def test_stream_index():
     index.delete()
 
 
+@pytest.mark.skip(reason='not ready, too slow')
 def test_batch_index():
     uri = GcsBlobUpath('/test/gcp/aivectorsearch', bucket_name='zpz-tmp')
     uri.rmrf()

@@ -135,7 +135,7 @@ def get_credentials(
                 maximum=10.0,
                 timeout=300.0,
             )(credentials.refresh)(Request())
-            # One check shows that this token expires in one hour.
+            # This token expires in one hour.
         except RetryError as e:
             raise e.cause
         renewed = True

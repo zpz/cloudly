@@ -2,7 +2,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from cloudly.upathlib import LocalUpath
-from cloudly.upathlib.serializer import (
+from cloudly.util.serializer import (
     AvroSerializer,
     CsvSerializer,
     JsonSerializer,

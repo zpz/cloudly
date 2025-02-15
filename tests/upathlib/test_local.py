@@ -5,7 +5,7 @@ from uuid import uuid4
 import pytest
 
 from cloudly.upathlib import LocalUpath
-from cloudly.upathlib.serializer import Lz4PickleSerializer
+from cloudly.util.serializer import Lz4PickleSerializer
 
 
 @pytest.fixture

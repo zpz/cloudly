@@ -371,8 +371,6 @@ class InstanceConfig:
         self.zone = zone
         self.startup_script = startup_script
 
-        print('ID', self._instance.id)
-
     @property
     def instance(self) -> compute_v1.Instance:
         # printing the output to see info.

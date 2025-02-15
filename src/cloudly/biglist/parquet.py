@@ -52,7 +52,7 @@ logger = logging.getLogger(__name__)
 
 class ParquetFileReader(FileReader):
     @classmethod
-    def get_gcsfs(cls, *, good_for_seconds=600) -> GcsFileSystem:
+    def get_gcsfs(cls, *, valid_for_seconds=600) -> GcsFileSystem:
         """
         Obtain a `pyarrow.fs.GcsFileSystem`_ object with credentials given so that
         the GCP default process of inferring credentials (which involves
@@ -62,14 +62,14 @@ class ParquetFileReader(FileReader):
         default credential inference process is a high overhead.
         """
         cred, renewed = get_credentials(
-            valid_for_seconds=good_for_seconds,
+            valid_for_seconds=valid_for_seconds,
             return_state=True,
         )
         if renewed or getattr(cls, '_GCSFS', None) is None:
             fs = GcsFileSystem(
                 access_token=cred.token,
                 credential_token_expiration=cred.expiry,
-            )
+            )  # This call takes non-trivial time.
             cls._GCSFS = fs
         return cls._GCSFS
 
@@ -86,9 +86,23 @@ class ParquetFileReader(FileReader):
             Path of the file.
         """
         ff, pp = FileSystem.from_uri(str(path))
+
         if isinstance(ff, GcsFileSystem):
             ff = cls.get_gcsfs()
-        file = ParquetFile(pp, filesystem=ff)
+
+        try:
+            file = ParquetFile(pp, filesystem=ff)
+        except PermissionError:
+            # This was observed in GCP.
+            # I still don't understand why.
+            # Assuming this is due to some tricky timing issue in the credential refresh,
+            # give it another try.
+            if isinstance(ff, GcsFileSystem):
+                ff = cls.get_gcsfs()
+                file = ParquetFile(pp, FileSystem=ff)
+            else:
+                raise
+
         Finalize(file, file.reader.close)
         # NOTE: can not use
         #

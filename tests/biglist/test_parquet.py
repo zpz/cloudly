@@ -10,7 +10,7 @@ from cloudly.biglist.parquet import (
     write_pylist_to_parquet,
 )
 from cloudly.upathlib import LocalUpath
-from cloudly.upathlib.serializer import (
+from cloudly.util.serializer import (
     make_parquet_schema,
     make_parquet_type,
 )

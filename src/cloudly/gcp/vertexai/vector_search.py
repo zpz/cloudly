@@ -331,7 +331,6 @@ class BatchIndex(Index):
           https://cloud.google.com/vertex-ai/docs/vector-search/setup/format-structure
         """
         assert uri.startswith('gs://')
-        print('uri', uri)
         self.index.update_embeddings(
             contents_delta_uri=uri,
             is_complete_overwrite=is_complete_overwrite,
