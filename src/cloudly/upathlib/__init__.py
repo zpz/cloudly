@@ -56,7 +56,7 @@ def resolve_path(path: PathType) -> Upath:
             raise NotImplementedError('AWS S3 storage is not implemented')
         if path.startswith('https://'):
             if 'blob.core.windows.net' in path:
-                from cloudly.azure.storage import AzureBlobUpath
+                from cloudly.experimental.azure.storage import AzureBlobUpath
 
                 return AzureBlobUpath(path)
             raise ValueError(f"unrecognized value: '{path}'")

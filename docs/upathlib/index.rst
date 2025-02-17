@@ -12,6 +12,5 @@ Upathlib
    :maxdepth: 1
 
    upathlib
-   serializer
    versioned_uploadable
    

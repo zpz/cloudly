@@ -22,10 +22,9 @@ from google.cloud import aiplatform
 from google.cloud.aiplatform import matching_engine
 from typing_extensions import Self
 
+from cloudly.gcp.storage import GcsBlobUpath
 from cloudly.util.datetime import utcnow
 from cloudly.util.serializer import NewlineDelimitedOrjsonSeriealizer
-
-from ..storage import GcsBlobUpath
 
 logger = logging.getLogger(__name__)
 

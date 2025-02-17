@@ -28,7 +28,6 @@ or with optional dependencies, such as
    biglist/index
    upathlib/index
    gcp/index
-   azure/index
    util/index
 
 

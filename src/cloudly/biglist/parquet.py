@@ -85,23 +85,26 @@ class ParquetFileReader(FileReader):
         path
             Path of the file.
         """
-        ff, pp = FileSystem.from_uri(str(path))
+        fs, pp = FileSystem.from_uri(str(path))
 
-        if isinstance(ff, GcsFileSystem):
-            ff = cls.get_gcsfs()
-
-        try:
-            file = ParquetFile(pp, filesystem=ff)
-        except PermissionError:
-            # This was observed in GCP.
-            # I still don't understand why.
-            # Assuming this is due to some tricky timing issue in the credential refresh,
-            # give it another try.
-            if isinstance(ff, GcsFileSystem):
+        if isinstance(fs, GcsFileSystem):
+            try:
                 ff = cls.get_gcsfs()
-                file = ParquetFile(pp, FileSystem=ff)
-            else:
-                raise
+                file = ParquetFile(pp, filesystem=ff)
+            except PermissionError as e:
+                # This was observed in GCP.
+                # I still don't understand why.
+                # Assuming this is due to some tricky timing issue in the credential refresh,
+                # give it another try.
+                logger.error(f'{e}; retry once')
+                try:
+                    ff = cls.get_gcsfs()
+                    file = ParquetFile(pp, filesystem=ff)
+                except PermissionError as e:
+                    logger.error(f'{e} on retry; fall back on pyarrow')
+                    file = ParquetFile(pp, FileSystem=fs)
+        else:
+            file = ParquetFile(pp, filesystem=fs)
 
         Finalize(file, file.reader.close)
         # NOTE: can not use
