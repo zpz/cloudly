@@ -22,6 +22,7 @@ upathlib
    :no-members:
    :no-undoc-members:
    :no-special-members:
+   :no-index:
 
 
 

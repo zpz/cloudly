@@ -15,4 +15,5 @@ Utilities
    docker
    logging
    multiplexer
+   serializer
    seq

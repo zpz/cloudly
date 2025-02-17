@@ -98,14 +98,22 @@ quote-style = "single"
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]
-addopts = "-sv --log-cli-level info -p no:cacheprovider --ignore tests/experiments --tb=short --durations 3"
+addopts = "-sv --log-cli-level info -p no:cacheprovider --ignore tests/experiments --ignore tests/experimental --tb=short --durations 3"
 
 
 [tool.coverage.report]
 fail_under = 70
 show_missing = true
 skip_empty = true
-
+omit = [
+    "src/cloudly/experimental",
+]
+exclude_also = [
+    "def __repr__",
+    "def __str__",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+]
 
 [tool.coverage.run]
 source = ["cloudly"]

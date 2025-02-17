@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 from typing_extensions import Self
 
-from cloudly.azure.storage import (
+from cloudly.experimental.azure.storage import (
     AzureBlobUpath,
     ResourceExistsError,
     ResourceNotFoundError,
@@ -575,12 +575,16 @@ class BlobLeaseClient:
 
 
 def test_azure_all(mocker):
-    mocker.patch('cloudly.azure.storage.ContainerClient', ContainerClient)
-    mocker.patch('cloudly.azure.storage.BlobClient', BlobClient)
-    mocker.patch('cloudly.azure.storage.BlobLeaseClient', BlobLeaseClient)
-    mocker.patch('cloudly.azure.storage.AzureBlobUpath._ACCOUNT_NAME', 'abc')
-    mocker.patch('cloudly.azure.storage.AzureBlobUpath._ACCOUNT_KEY', 'xyz')
-    mocker.patch('cloudly.azure.storage.AzureBlobUpath._SAS_TOKEN', '1010')
+    mocker.patch('cloudly.experimental.azure.storage.ContainerClient', ContainerClient)
+    mocker.patch('cloudly.experimental.azure.storage.BlobClient', BlobClient)
+    mocker.patch('cloudly.experimental.azure.storage.BlobLeaseClient', BlobLeaseClient)
+    mocker.patch(
+        'cloudly.experimental.azure.storage.AzureBlobUpath._ACCOUNT_NAME', 'abc'
+    )
+    mocker.patch(
+        'cloudly.experimental.azure.storage.AzureBlobUpath._ACCOUNT_KEY', 'xyz'
+    )
+    mocker.patch('cloudly.experimental.azure.storage.AzureBlobUpath._SAS_TOKEN', '1010')
 
     c = AzureBlobUpath(
         '/tmp/test',

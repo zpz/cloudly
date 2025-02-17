@@ -24,7 +24,7 @@ from cloudly.gcp.compute import (
     validate_label_value,
 )
 
-from ._postgres import attach_load_balancer
+from ._postgres import attach_load_balancer, delete_load_balancer
 
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.WARNING)
 # Suppress the message "file_cache is only supported with oauth2client<4.0.0"
@@ -58,7 +58,7 @@ def _wait_on_operation(name, *, timeout: float = 600):
         t1 = time.perf_counter()
         if t1 - t0 >= timeout:
             raise concurrent.futures.TimeoutError(f'{t1 - t0} seconds')
-        time.sleep(5)
+        time.sleep(10)
 
 
 class Instance:
@@ -231,6 +231,7 @@ class Instance:
         inst = self.instance
         assert inst['name'] == name
         self.replica_names = inst.get('replicaNames', [])
+        self.region = inst['region']
         self.zone = inst['gceZone']
         self.create_time = inst['createTime']
         self.machine_type = inst['settings']['tier']
@@ -256,18 +257,19 @@ class Instance:
         return self.instance['state']
 
     def delete(self) -> None:
-        for name in self.replica_names:
-            self._delete(name, wait=False)
         replicas = self.replica_names
-        t0 = time.perf_counter()
-        while replicas:
-            if time.perf_counter() - t0 > 600:
-                raise concurrent.futures.TimeoutError(
-                    'timed out waiting for deletion of replicas'
-                )
-            print(f'waiting for deletion of replicas: {replicas}')
-            time.sleep(5)
-            replicas = self.instance.get('replicaNames')
+        if replicas:
+            delete_load_balancer(self.name, f'{self.region}-a')
+            for name in replicas:
+                self._delete(name, wait=False)
+            t0 = time.perf_counter()
+            while replicas := self.instance.get('replicaNames'):
+                if time.perf_counter() - t0 > 600:
+                    raise concurrent.futures.TimeoutError(
+                        'timed out waiting for deletion of replicas'
+                    )
+                print(f'waiting for deletion of replicas: {replicas}')
+                time.sleep(5)
         t0 = time.perf_counter()
         while True:
             try:

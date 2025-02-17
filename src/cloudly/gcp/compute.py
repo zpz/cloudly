@@ -3,6 +3,7 @@ from __future__ import annotations
 __all__ = ['Instance', 'InstanceConfig']
 
 
+import logging
 import os
 import string
 import warnings
@@ -13,6 +14,8 @@ from google.cloud import compute_v1
 from cloudly.util.logging import get_calling_file
 
 from .auth import get_credentials, get_project_id
+
+logger = logging.getLogger(__name__)
 
 
 def validate_label_key(val: str) -> str:
@@ -482,6 +485,7 @@ class Instance:
         req = compute_v1.DeleteInstanceRequest(
             instance=self.name, project=get_project_id(), zone=self.zone
         )
+        logger.info('deleting %s', self)
         op = _call_client('delete', req)
         op.result()
         self.instance = None
