@@ -102,7 +102,7 @@ class ParquetFileReader(FileReader):
                     file = ParquetFile(pp, filesystem=ff)
                 except PermissionError as e:
                     logger.error(f'{e} on retry; fall back on pyarrow')
-                    file = ParquetFile(pp, FileSystem=fs)
+                    file = ParquetFile(pp, filesystem=fs)
         else:
             file = ParquetFile(pp, filesystem=fs)
 

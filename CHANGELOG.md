@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 
+## [0.3.6] - 2025-02-17
+
+- Bug fix in `cloudly.biglist.parquet.ParquetFileReader.load_file`---parameter name typo.
+
+
 ## [0.3.5] - 2025-02-16
 
 - New sub-package `cloudly.experimental` to host things that are not ready for use.
