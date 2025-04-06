@@ -284,15 +284,19 @@ class CsvSerializer(Serializer):
     @classmethod
     def deserialize(
         cls, y: bytes, *, as_dict: bool = False, **kwargs
-    ) -> list[tuple] | list[dict]:
+    ) -> list[tuple] | list[dict[str, Any]]:
         y = io.StringIO(y.decode('utf-8'))
         reader = csv.reader(y, **kwargs)
+        fieldnames = tuple(next(reader))
+        col0 = 0 if fieldnames[0] else 1  # skip the first column if it's empty
         if as_dict:
-            fieldnames = tuple(next(reader))
             return [
-                {k: v for k, v in zip(fieldnames, row)} for row in reader
+                {k: v for k, v in zip(fieldnames[col0:], row[col0:])} for row in reader
             ]  # list[dict]
-        return [tuple(row) for row in reader]  # list[tuple]
+        return [
+            fieldnames[col0:],
+            *(tuple(row[col0:]) for row in reader),
+        ]  # list[tuple]
         # The first row is `fieldnames`.
 
 
