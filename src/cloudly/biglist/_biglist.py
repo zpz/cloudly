@@ -322,7 +322,7 @@ class Biglist(BiglistBase[Element]):
         """
         if extra:
             extra = extra.lstrip('_').rstrip('_') + '_'
-        return f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{extra}{str(uuid4()).replace('-', '')[:16]}_{buffer_len}"
+        return f'{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S.%f")}_{extra}{str(uuid4()).replace("-", "")[:16]}_{buffer_len}'
         # File name pattern introduced on 7/25/2022.
         # This should guarantee the file name is unique, hence
         # we do not need to verify that this file name is not already used.
@@ -492,7 +492,7 @@ class Biglist(BiglistBase[Element]):
                 # This puts the on-disk data structure in a transitional state.
                 filename = getattr(self, '_flush_eager_file', None)
                 if not filename:
-                    filename = f"{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S.%f')}_{str(uuid4()).replace('-', '')}"
+                    filename = f'{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S.%f")}_{str(uuid4()).replace("-", "")}'
                     (self.path / '_flush_eager' / filename).write_json(
                         self._append_files_buffer, overwrite=False
                     )

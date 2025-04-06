@@ -111,11 +111,11 @@ class AzureBlobUpath(BlobUpath):
         )
 
     def __str__(self) -> str:
-        return f"{self._container_name}://{self._path.lstrip('/')}"
+        return f'{self._container_name}://{self._path.lstrip("/")}'
 
     def as_uri(self) -> str:
         # TODO: what's the conventional lead word for Azure?
-        return f"azure://{self._container_name}/{self._path.lstrip('/')}"
+        return f'azure://{self._container_name}/{self._path.lstrip("/")}'
 
     @property
     def container_name(self):

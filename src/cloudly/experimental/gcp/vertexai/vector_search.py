@@ -303,7 +303,7 @@ class BatchIndex(Index):
             The path of the data file (blob) that was created.
         """
         assert staging_folder.startswith('gs://')
-        folder = f"{utcnow().strftime('%Y%m%d-%H%M%S')}-{str(uuid4()).split('-')[0]}"
+        folder = f'{utcnow().strftime("%Y%m%d-%H%M%S")}-{str(uuid4()).split("-")[0]}'
         file = GcsBlobUpath(staging_folder, folder, 'data.json')
         file.write_bytes(
             NewlineDelimitedOrjsonSeriealizer.serialize(
@@ -447,10 +447,10 @@ class Endpoint:
                         )
 
         if not deployed_index_id:
-            deployed_index_id = f"deployed_{utcnow().strftime('%Y%m%d_%H%M%S')}_{str(uuid4()).split('-')[0]}"
+            deployed_index_id = f'deployed_{utcnow().strftime("%Y%m%d_%H%M%S")}_{str(uuid4()).split("-")[0]}'
         if not display_name:
             display_name = (
-                f"{index.display_name} since {utcnow().strftime('%Y%m%d-%H%M%S')}"
+                f'{index.display_name} since {utcnow().strftime("%Y%m%d-%H%M%S")}'
             )
         if not max_replica_count:
             max_replica_count = min_replica_count * 2

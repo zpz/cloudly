@@ -7,7 +7,7 @@ ZONE = 'us-west1-a'
 
 def test_compute():
     config = InstanceConfig(
-        name=f"test-{str(uuid4()).split('-')[0]}",
+        name=f'test-{str(uuid4()).split("-")[0]}',
         zone=ZONE,
         machine_type='n1-standard-1',
     )

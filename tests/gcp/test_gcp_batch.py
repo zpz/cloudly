@@ -21,7 +21,7 @@ def test_batch():
             'region': REGION,
         },
     )
-    job = Job.create(f"test-batch-job-{str(uuid4()).split('-')[0]}", config)
+    job = Job.create(f'test-batch-job-{str(uuid4()).split("-")[0]}', config)
     print('created batch job:', job)
     try:
         print('name:', job.name)

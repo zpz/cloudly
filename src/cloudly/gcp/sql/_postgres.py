@@ -204,7 +204,7 @@ sudo /var/lib/haproxy/cfgupdate.sh {pg_master_instance_name}
 """
     Instance.create(
         InstanceConfig(
-            name=f"haproxy-{pg_master_instance_name.replace('_', '-')}",
+            name=f'haproxy-{pg_master_instance_name.replace("_", "-")}',
             zone=zone,
             network_uri=network_uri,
             subnet_uri=subnet_uri,
@@ -215,4 +215,4 @@ sudo /var/lib/haproxy/cfgupdate.sh {pg_master_instance_name}
 
 
 def delete_load_balancer(pg_master_instance_name: str, zone: str):
-    Instance(f"haproxy-{pg_master_instance_name.replace('_', '-')}", zone=zone).delete()
+    Instance(f'haproxy-{pg_master_instance_name.replace("_", "-")}', zone=zone).delete()

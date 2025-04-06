@@ -173,7 +173,7 @@ def add_disk_handler(
         foldername = foldername.rstrip('/')
     else:
         launcher = get_calling_file()
-        foldername == f"{os.environ.get('LOGDIR', '/tmp/log')}/{launcher.lstrip('/').replace('/', '-')}"
+        foldername == f'{os.environ.get("LOGDIR", "/tmp/log")}/{launcher.lstrip("/").replace("/", "-")}'
     print(f"Log files are located in '{foldername}'")
     os.makedirs(foldername, exist_ok=True)
     h = logging.handlers.RotatingFileHandler(

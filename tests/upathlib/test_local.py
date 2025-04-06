@@ -74,5 +74,5 @@ def test_pickle(test_path):
     pp.write_json(data, overwrite=True)
     assert pp.read_json() == data
 
-    Lz4PickleSerializer.dump(data, pp, overwrite=True)
-    assert Lz4PickleSerializer.load(pp) == data
+    pp.write_bytes(Lz4PickleSerializer.serialize(data), overwrite=True)
+    assert Lz4PickleSerializer.deserialize(pp.read_bytes()) == data
