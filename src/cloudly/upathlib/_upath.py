@@ -613,8 +613,10 @@ class Upath(abc.ABC):
             buffer = io.StringIO()
             data.to_csv(buffer, **kwargs)
             self.write_text(buffer.getvalue(), overwrite=overwrite)
-
-        self.write_bytes(CsvSerializer.serialize(data, **kwargs), overwrite=overwrite)
+        else:
+            self.write_bytes(
+                CsvSerializer.serialize(data, **kwargs), overwrite=overwrite
+            )
 
     def read_csv(self, *, use_pandas: bool = False, **kwargs):
         """
@@ -626,7 +628,8 @@ class Upath(abc.ABC):
 
             data = io.StringIO(self.read_text())
             return pandas.read_csv(data, **kwargs)
-        return CsvSerializer.deserialize(self.read_bytes(), **kwargs)
+        else:
+            return CsvSerializer.deserialize(self.read_bytes(), **kwargs)
 
     def _dir_to_dir(
         self,
