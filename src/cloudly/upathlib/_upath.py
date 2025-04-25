@@ -18,6 +18,7 @@ import abc
 import contextlib
 import datetime
 import functools
+import io
 import os
 import os.path
 import pathlib
@@ -37,6 +38,7 @@ from tqdm.auto import tqdm
 from typing_extensions import Self
 
 from cloudly.util.serializer import (
+    CsvSerializer,
     JsonSerializer,
     ParquetSerializer,
     PickleSerializer,
@@ -571,28 +573,63 @@ class Upath(abc.ABC):
         )
 
     def write_json(self, data: Any, *, overwrite=False, **kwargs) -> None:
-        return JsonSerializer.dump(data, self, overwrite=overwrite, **kwargs)
+        self.write_bytes(JsonSerializer.serialize(data, **kwargs), overwrite=overwrite)
 
     def read_json(self, **kwargs) -> Any:
-        return JsonSerializer.load(self, **kwargs)
+        return JsonSerializer.deserialize(self.read_bytes(), **kwargs)
 
     def write_pickle(self, data: Any, *, overwrite=False, **kwargs) -> None:
-        return PickleSerializer.dump(data, self, overwrite=overwrite, **kwargs)
+        self.write_bytes(
+            PickleSerializer.serialize(data, **kwargs), overwrite=overwrite
+        )
 
     def read_pickle(self, **kwargs) -> Any:
-        return PickleSerializer.load(self, **kwargs)
+        return PickleSerializer.deserialize(self.read_bytes(), **kwargs)
 
     def write_pickle_zstd(self, data: Any, *, overwrite=False, **kwargs) -> None:
-        return ZstdPickleSerializer.dump(data, self, overwrite=overwrite, **kwargs)
+        self.write_bytes(
+            ZstdPickleSerializer.serialize(data, **kwargs), overwrite=overwrite
+        )
 
     def read_pickle_zstd(self, **kwargs) -> Any:
-        return ZstdPickleSerializer.load(self, **kwargs)
+        return ZstdPickleSerializer.deserialize(self.read_bytes(), **kwargs)
 
     def write_parquet(self, data: list[dict], *, overwrite=False, **kwargs) -> None:
-        return ParquetSerializer.dump(data, self, overwrite=overwrite, **kwargs)
+        self.write_bytes(
+            ParquetSerializer.serialize(data, **kwargs), overwrite=overwrite
+        )
 
     def read_parquet(self, **kwargs) -> list[dict]:
-        return ParquetSerializer.load(self, **kwargs)
+        return ParquetSerializer.deserialize(self.read_bytes(), **kwargs)
+
+    def write_csv(
+        self, data, *, overwrite=False, use_pandas: bool = False, **kwargs
+    ) -> None:
+        """
+        If `use_pandas` is `True`, then `data` is a pandas DataFrame.
+        Otherwise, `data` is `iterable[tuple] | iterable[dict[str, Any]]`.
+        """
+        if use_pandas:
+            buffer = io.StringIO()
+            data.to_csv(buffer, **kwargs)
+            self.write_text(buffer.getvalue(), overwrite=overwrite)
+        else:
+            self.write_bytes(
+                CsvSerializer.serialize(data, **kwargs), overwrite=overwrite
+            )
+
+    def read_csv(self, *, use_pandas: bool = False, **kwargs):
+        """
+        If `use_pands` is `True`, then return a pandas DataFrame.
+        Otherwise, return a `list`.
+        """
+        if use_pandas:
+            import pandas
+
+            data = io.StringIO(self.read_text())
+            return pandas.read_csv(data, **kwargs)
+        else:
+            return CsvSerializer.deserialize(self.read_bytes(), **kwargs)
 
     def _dir_to_dir(
         self,

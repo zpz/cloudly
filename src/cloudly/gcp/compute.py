@@ -218,7 +218,7 @@ class InstanceConfig:
                     'sudo mkfs.ext4 -F /dev/disk/by-id/google-local-nvme-ssd-0',
                     f'sudo mkdir -p {self.mount_path}',
                     f'sudo mount /dev/disk/by-id/google-local-nvme-ssd-0 {self.mount_path}',
-                    f'sudo chmod a+{mode} {self.mount_path}' '',
+                    f'sudo chmod a+{mode} {self.mount_path}',
                 )
             )
 

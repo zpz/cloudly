@@ -232,10 +232,10 @@ class Table:
 
         sql = f"""CREATE INDEX {index_name} ON {self.table_name} USING {index_type} ({vector_col} vector_{distance_metric}_ops)"""
         if index_type == 'ivfflat':
-            sql = f"{sql} WITH (lists = {index_opts.get('lists', 100)})"
+            sql = f'{sql} WITH (lists = {index_opts.get("lists", 100)})'
         else:
             assert index_type == 'hnsw'
-            sql = f"{sql} WITH (ef_construction={index_opts.get('ef_construction', 64)}, m={index_opts.get('m', 16)})"
+            sql = f'{sql} WITH (ef_construction={index_opts.get("ef_construction", 64)}, m={index_opts.get("m", 16)})'
         if partial_index_condition:
             sql = f'{sql} WHERE {partial_index_condition}'
         _execute(self._conn, sql)
@@ -309,5 +309,5 @@ class Table:
         dist = f"{index_info['vector_col']} {distance_op} '{str(query)}'"
         sql = f'SELECT *, {dist} AS {distance_name} FROM {self.table_name}'
         if index_info.get('partial_index_condition'):
-            sql = f"{sql} WHERE {index_info['partial_index_condition']}"
+            sql = f'{sql} WHERE {index_info["partial_index_condition"]}'
         return sql

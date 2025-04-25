@@ -82,7 +82,7 @@ def test_csv():
     # data rows are tuples
 
     print()
-    x = CsvSerializer.serialize(data, fieldnames=names)
+    x = CsvSerializer.serialize((names, *data))
     print('CSV serialized:')
     print(x)
     y = CsvSerializer.deserialize(x)
@@ -93,9 +93,9 @@ def test_csv():
         os.environ.get('TMPDIR', '/tmp'), 'cloudly/test/test-serializer-csv-tuple.csv'
     )
     file.rmrf()
-    CsvSerializer.dump(data, file, fieldnames=names)
+    file.write_csv((names, *data))
     # TODO: here, manually check the file and verify it looks right.
-    y = CsvSerializer.load(file)
+    y = file.read_csv()
     print('CSV loaded:')
     print(y)
 
@@ -112,9 +112,9 @@ def test_csv():
         os.environ.get('TMPDIR', '/tmp'), 'cloudly/test/test-serializer-csv-dict.csv'
     )
     file.rmrf()
-    CsvSerializer.dump([dict(zip(names, row)) for row in data], file)
+    file.write_csv([dict(zip(names, row)) for row in data])
     # TODO: here, manually check the file and verify it looks right.
-    y = CsvSerializer.load(file)
+    y = file.read_csv()
     print('CSV loaded:')
     print(y)
 
@@ -142,9 +142,9 @@ def test_newline_delimited_json():
         'cloudly/test/test-serializer-ndjson-tuple.json',
     )
     file.rmrf()
-    NewlineDelimitedOrjsonSeriealizer.dump(data, file)
+    file.write_bytes(NewlineDelimitedOrjsonSeriealizer.serialize(data))
     # TODO: here, manually check the file and verify it looks right.
-    y = NewlineDelimitedOrjsonSeriealizer.load(file)
+    y = NewlineDelimitedOrjsonSeriealizer.deserialize(file.read_bytes())
     print('NDJSON loaded:')
     print(y)
 
@@ -164,11 +164,13 @@ def test_newline_delimited_json():
         'cloudly/test/test-serializer-ndjson-dict.json',
     )
     file.rmrf()
-    NewlineDelimitedOrjsonSeriealizer.dump(
-        [dict(zip(names, row)) for row in data], file
+    file.write_bytes(
+        NewlineDelimitedOrjsonSeriealizer.serialize(
+            [dict(zip(names, row)) for row in data]
+        )
     )
     # TODO: here, manually check the file and verify it looks right.
-    y = NewlineDelimitedOrjsonSeriealizer.load(file)
+    y = NewlineDelimitedOrjsonSeriealizer.deserialize(file.read_bytes())
     print('NDJSON loaded:')
     print(y)
 
@@ -205,9 +207,8 @@ def test_avro():
     file = LocalUpath(
         os.environ.get('TMPDIR', '/tmp'), 'cloudly/test/test-serializer-avro.avro'
     )
-    file.rmrf()
-    AvroSerializer.dump(records, file, schema=sch)
-    y = AvroSerializer.load(file)
+    file.write_bytes(AvroSerializer.serialize(records, schema=sch), overwrite=True)
+    y = AvroSerializer.deserialize(file.read_bytes())
     print('avro loaded:')
     print(y)
     assert y == records

@@ -7,7 +7,7 @@ import threading
 import zlib
 from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
-from typing import Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 
 import fastavro
 import orjson
@@ -55,17 +55,17 @@ class Serializer(Protocol):
     @classmethod
     def deserialize(cls, y: bytes, **kwargs) -> T: ...
 
-    @classmethod
-    def dump(cls, x: T, file, *, overwrite: bool = False, **kwargs) -> None:
-        # `file` is a `Upath` object.
-        y = cls.serialize(x, **kwargs)
-        file.write_bytes(y, overwrite=overwrite)
+    # @classmethod
+    # def dump(cls, x: T, file, *, overwrite: bool = False, **kwargs) -> None:
+    #     # `file` is a `Upath` object.
+    #     y = cls.serialize(x, **kwargs)
+    #     file.write_bytes(y, overwrite=overwrite)
 
-    @classmethod
-    def load(cls, file, **kwargs) -> T:
-        # `file` is a `Upath` object.
-        y = file.read_bytes()
-        return cls.deserialize(y, **kwargs)
+    # @classmethod
+    # def load(cls, file, **kwargs) -> T:
+    #     # `file` is a `Upath` object.
+    #     y = file.read_bytes()
+    #     return cls.deserialize(y, **kwargs)
 
 
 class JsonSerializer(Serializer):
@@ -253,11 +253,11 @@ class CsvSerializer(Serializer):
     @classmethod
     def serialize(
         cls,
-        x: Iterable[tuple] | Iterable[dict],
-        *,
-        fieldnames: Sequence[str] | None = None,
+        x: Iterable[Sequence] | Iterable[dict[str, Any]],
         **kwargs,
     ) -> bytes:
+        # If `x` is an iterable of tuples or lists, then the first element
+        # is the field names. This is to be consistent with :meth:`deserialize`.
         try:
             row = next(x)
         except TypeError:
@@ -268,30 +268,35 @@ class CsvSerializer(Serializer):
         if isinstance(row, dict):
             # Writing dicts in this branch could be much slower than
             # writing tuples in the next branch.
-            if fieldnames is None:
-                fieldnames = list(row.keys())
-            writer = csv.DictWriter(sink, fieldnames=fieldnames, **kwargs)
+            writer = csv.DictWriter(sink, fieldnames=list(row.keys()), **kwargs)
             writer.writeheader()
             writer.writerow(row)
             writer.writerows(x)
         else:
-            if not fieldnames:
-                raise ValueError(
-                    '`fieldnames` is required when data rows are sequences'
-                )
+            fieldnames = row
             writer = csv.writer(sink, **kwargs)
             writer.writerow(fieldnames)
-            writer.writerow(row)
             writer.writerows(x)
 
         sink.seek(0)
         return sink.getvalue().encode('utf-8')
 
     @classmethod
-    def deserialize(cls, y: bytes, **kwargs) -> list[tuple]:
+    def deserialize(
+        cls, y: bytes, *, as_dict: bool = False, **kwargs
+    ) -> list[tuple] | list[dict[str, Any]]:
         y = io.StringIO(y.decode('utf-8'))
         reader = csv.reader(y, **kwargs)
-        return [tuple(row) for row in reader]
+        fieldnames = tuple(next(reader))
+        col0 = 0 if fieldnames[0] else 1  # skip the first column if it's empty
+        if as_dict:
+            return [
+                {k: v for k, v in zip(fieldnames[col0:], row[col0:])} for row in reader
+            ]  # list[dict]
+        return [
+            fieldnames[col0:],
+            *(tuple(row[col0:]) for row in reader),
+        ]  # list[tuple]
         # The first row is `fieldnames`.
 
 
@@ -313,15 +318,15 @@ def _make_avro_schema(x, name: str) -> dict:
         return {'name': name, 'type': 'record', 'fields': fields}
     if isinstance(x, list):
         assert len(x) > 0, (
-            'empty list is not supported, ' 'because its type can not be inferred'
+            'empty list is not supported, because its type can not be inferred'
         )
         z0 = _make_avro_schema(x[0], name + '_item')
         if len(x) > 1:
             for v in x[1:]:
                 z1 = _make_avro_schema(v, name + '_item')
-                assert (
-                    z1 == z0
-                ), f'schema for x[0] ({x[0]}): {z0}; schema for x[?] ({v}): {z1}'
+                assert z1 == z0, (
+                    f'schema for x[0] ({x[0]}): {z0}; schema for x[?] ({v}): {z1}'
+                )
         if len(z0) < 3:
             items = z0['type']
         else:

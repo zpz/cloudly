@@ -257,7 +257,7 @@ def read_streams(
             threading.Thread(
                 target=read_stream,
                 args=(qin, qout, client),
-                name=f'thread-read-BQ-streams-{idx+1}',
+                name=f'thread-read-BQ-streams-{idx + 1}',
             )
         )
 
@@ -291,9 +291,9 @@ class Dataset:
     def make_temp_table_name(prefix: str = None, postfix: str = None) -> str:
         name = utcnow().strftime('%Y%m%d_%H%M%S')
         if prefix:
-            name = f"{prefix.strip(' -_').replace(' ', '_').replace('-', '_')}_{name}"
+            name = f'{prefix.strip(" -_").replace(" ", "_").replace("-", "_")}_{name}'
         if postfix:
-            name = f"{name}_{postfix.strip(' -_').replace(' ', '_').replace('-', '_')}"
+            name = f'{name}_{postfix.strip(" -_").replace(" ", "_").replace("-", "_")}'
         return name
 
     def __init__(self, dataset_id: str, project_id: str = None):

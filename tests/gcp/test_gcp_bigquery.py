@@ -294,7 +294,7 @@ def test_scalar_function():
             FROM `{table.qualified_table_id}`
         """
         for row in bigquery.read(sql, as_dict=True):
-            assert row['merged'] == f"{row['name']}-{row['age']}"
+            assert row['merged'] == f'{row["name"]}-{row["age"]}'
 
     finally:
         table.drop()
