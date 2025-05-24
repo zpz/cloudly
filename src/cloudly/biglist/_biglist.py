@@ -332,6 +332,12 @@ class Biglist(BiglistBase[Element]):
         # Change in 0.8.4: the uuid part has dash removed and length reduced to 10; add ``extra``.
         # Change in 0.9.5: keep 16 digits of the uuid4 str, instead of the previous 10.
 
+    @staticmethod
+    def _dump_file(x, file, *, serde, overwrite: bool = False, **kwargs) -> None:
+        # `file` is a `Upath` object.
+        y = serde.serialize(x, **kwargs)
+        file.write_bytes(y, overwrite=overwrite)
+
     def _flush(self) -> None:
         """
         Persist the content of the in-memory buffer to a file,
@@ -356,8 +362,12 @@ class Biglist(BiglistBase[Element]):
 
         if self._file_dumper is None:
             self._file_dumper = Dumper(self._get_thread_pool(), self._n_write_threads)
+
         self._file_dumper.dump_file(
-            self.registered_storage_formats[self.storage_format].dump,
+            functools.partial(
+                self._dump_file,
+                serde=self.registered_storage_formats[self.storage_format],
+            ),
             buffer,
             data_file,
             **self._serialize_kwargs,
@@ -567,22 +577,26 @@ class Biglist(BiglistBase[Element]):
         self.info = self._info_file.read_json()
         self._info_backup = copy.deepcopy(self.info)
 
+    @staticmethod
+    def _load_file(file, *, serde, **kwargs):
+        # `file` is a `Upath` object.
+        y = file.read_bytes()
+        return serde.deserialize(y, **kwargs)
+
     @property
     def files(self):
         # This method should be cheap to call.
         # TODO: call `reload`?
         self._warn_flush('files')
         serde = self.registered_storage_formats[self.storage_format]
-        fun = serde.load
-        if self._deserialize_kwargs:
-            fun = functools.partial(fun, **self._deserialize_kwargs)
+
         return BiglistFileSeq(
             self.path,
             [
                 (str(self.data_path / row[0]), *row[1:])
                 for row in self.info['data_files_info']
             ],
-            fun,
+            functools.partial(self._load_file, serde=serde, **self._deserialize_kwargs),
         )
 
 

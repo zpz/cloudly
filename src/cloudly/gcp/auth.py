@@ -54,6 +54,9 @@ def set_env(
     I need to use a second env var `GOOGLE_CLOUD_PROJECT` to provide project ID.
 
     If appropriate env vars are already set up (as is the case on a GCP machine), there is no need to call this function.
+
+    To get these credentials for your GCP account, look for "create access credentials" or "create credentials for a service account"
+    under "google workspace".
     """
     private_key = (
         '-----BEGIN PRIVATE KEY-----\n'
