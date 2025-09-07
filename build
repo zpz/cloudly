@@ -1,0 +1,3 @@
+#!/bin/bash
+
+python3 -m minidocker.py.build --parent=zppz/py310:25.08.30
