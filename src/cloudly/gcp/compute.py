@@ -1,3 +1,5 @@
+# This needs the service account to have the "Compute Admin" role.
+
 from __future__ import annotations
 
 __all__ = ['Instance', 'InstanceConfig']

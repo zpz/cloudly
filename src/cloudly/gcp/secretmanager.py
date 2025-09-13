@@ -1,3 +1,5 @@
+# This needs the service account to have the "Secret Manager Secret Accessor" role.
+
 __all__ = ['get_secret']
 
 from google.cloud import secretmanager

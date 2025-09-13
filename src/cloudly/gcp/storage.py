@@ -1,3 +1,6 @@
+# This needs the service account to have "Storage Object Admin" role.
+
+
 from __future__ import annotations
 
 __all__ = ['GcsBlobUpath']

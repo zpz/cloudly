@@ -1,3 +1,5 @@
+# This needs the servie account to have the "Cloud SQL Admin" and "Cloud SQL Client" roles.
+
 from __future__ import annotations
 
 __all__ = ['Instance', 'connect']
