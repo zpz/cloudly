@@ -1,6 +1,8 @@
 #!/bin/bash
 
-# export TINY=zppz/tiny:22.12.11
-# export PARENT="$(bash -c "$(docker run --rm ${TINY} cat /tools/find-image)" -- zppz/py3)"
-export PARENT=zppz/py310:25.04.06
-bash <(curl -s https://raw.githubusercontent.com/zpz/docker-mini/main/tools/pip-based/run) $@
+python3 -m minidocker.py run \
+    -e GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID} \
+    -v $(dirname ${GCP_APP_CREDENTIALS}):/tmp/gcp_creds \
+    -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_creds/$(basename ${GCP_APP_CREDENTIALS}) \
+    cloudly:dev
+

@@ -4,6 +4,8 @@ This module wraps a subset of the GCP Batch functionalities that are useful and 
 User code runs within a Docker container. Running a standalone script is not supported by this wrapper module.
 """
 
+# This needs the service account to have "Batch Job Editor" role.
+
 from __future__ import annotations
 
 __all__ = ['Job', 'JobConfig']

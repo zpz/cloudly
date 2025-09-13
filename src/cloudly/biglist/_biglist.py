@@ -13,7 +13,10 @@ from datetime import datetime, timezone
 from typing import Callable
 from uuid import uuid4
 
-import fastavro
+try:
+    import fastavro  # install this if you need to work with the Avro format
+except ImportError:
+    pass
 from typing_extensions import Self
 
 from cloudly.upathlib import PathType, Upath

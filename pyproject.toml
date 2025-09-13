@@ -9,15 +9,12 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "fastavro",
     "filelock",
     "orjson",
     "pyarrow",
     "tqdm",
     "typing-extensions",
-    "tzdata",
     "zstandard",
-    "deprecation",
 ]
 requires-python = ">=3.10"
 readme = "README.rst"
@@ -71,6 +68,7 @@ vertexai = [
     "google-cloud-resource-manager",
 ]
 test = [
+    "fastavro",
     "pytest-asyncio",
     "pytest-mock",
     "boltons",

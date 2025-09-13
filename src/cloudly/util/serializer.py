@@ -9,7 +9,10 @@ from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
 from typing import Any, Protocol, TypeVar
 
-import fastavro
+try:
+    import fastavro  # install this if you need to work with the Avro format.
+except ImportError:
+    pass
 import orjson
 import pyarrow
 import zstandard

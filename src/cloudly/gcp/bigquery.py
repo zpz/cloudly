@@ -1,3 +1,5 @@
+# The service account needs to have these roles: "BigQuery Admin",
+
 from __future__ import annotations
 
 __all__ = [

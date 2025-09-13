@@ -1,3 +1,5 @@
+# This needs the servie account to have the "Cloud SQL Admin" and "Cloud SQL Client" roles.
+
 from __future__ import annotations
 
 __all__ = ['Instance', 'connect']
@@ -64,6 +66,7 @@ def _wait_on_operation(name, *, timeout: float = 600):
 class Instance:
     """
     This is a CloudSQL "instance". It may be a single node or a "master" node with one or more read replicas.
+    CloudSQL is a managed PostgreSQL solution.
     """
 
     @classmethod
@@ -176,7 +179,7 @@ class Instance:
         num_read_replicas: int = 0,
         load_balancer_machine_type: str | None = None,
         **kwargs,
-    ):
+    ) -> Instance:
         """
         `name` is the name of the "master instance". This needs to be unique in the project.
         If `num_read_replicas > 0`, names of the replicas are constructed based on this `name`.
