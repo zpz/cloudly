@@ -1,4 +1,4 @@
 #!/bin/bash
 
-python3 -m minidocker.py.run cloudly:dev
+python3 -m minidocker.py run cloudly:dev
 
