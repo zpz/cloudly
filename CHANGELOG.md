@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `cloudly.util.serializer.Serializer` lose classmethods `load` and `dump` because that creats some kind of
   "circular imports" with `cloudly.upathlib` (although it works).
 - `cloudly.gcp.auth.set_env` is removed, because it's not a generic solution.
+- Removed dependency on `fastavro`---user just installs it if they use the functions that use this format.
 
 
 ## [0.3.6] - 2025-02-17

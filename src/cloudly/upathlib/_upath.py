@@ -177,6 +177,7 @@ class Upath(abc.ABC):
         executor = get_shared_thread_pool('upathlib', MAX_THREADS)
 
         if not quiet:
+            # TODO: remove use of `tqdm`?
             pbar = tqdm(
                 total=n_tasks,
                 bar_format='{percentage:5.1f}%, {n:.0f}/{total_fmt}, {elapsed} | {desc}',
