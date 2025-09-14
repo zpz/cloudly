@@ -410,11 +410,11 @@ class Biglist(BiglistBase[Element]):
         However, there are two things that the automatic `_flush` does not do:
 
         - First, if the append buffer is only partially filled when the user (of one Biglist object)
-        is done adding elements to the biglist, the data in the buffer will not be persisted.
+          is done adding elements to the biglist, the data in the buffer will not be persisted.
 
         - Second, `_flush` does not add new data files it has created into the meta info file.
-        It does not do so because doing it would need to lock the info file, which adds overhead
-        and harms concurrent independent writing.
+          It does not do so because doing it would need to lock the info file, which adds overhead
+          and harms concurrent independent writing.
 
         These two things are left to the user to do via explicit calls to :meth:`flush`.
 
