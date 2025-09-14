@@ -3,7 +3,7 @@ ExternalBiglist
 ***************
 
 Creating a ExternalBiglist
-=========================
+==========================
 
 
 Apache Parquet is a popular file format in the "big data" domain.
@@ -141,12 +141,12 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 7
 >>> f0.metadata  # doctest: +ELLIPSIS
 <pyarrow._parquet.FileMetaData object at 0x7...>
-  created_by: parquet-cpp-arrow version 1...
+  created_by: parquet-cpp-arrow version 2...
   num_columns: 3
   num_rows: 61
   num_row_groups: 7
   format_version: 2.6
-  serialized_size: 23...
+  serialized_size: 2...
 >>> f0.metadata.row_group(1)  # doctest: +ELLIPSIS
 <pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
