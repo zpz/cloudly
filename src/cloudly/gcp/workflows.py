@@ -59,7 +59,7 @@ def _call_execution_client(meth: str, *args, **kwargs):
 class Step:
     def __init__(self, name: str, content: dict):
         """
-        `content` is a dict of the step's action, e.g.,
+        `content` is a dict of the step's action, e.g.,::
 
             {
               "call": "http.get",
@@ -109,6 +109,7 @@ class BatchStep(Step):
     Running a Batch job using Workflows.
 
     See
+
       https://atamel.dev/posts/2023/05-30_workflows_batch_connector/
       https://cloud.google.com/workflows/docs/reference/googleapis/batch/Overview
       https://cloud.google.com/workflows/docs/sleeping
