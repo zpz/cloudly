@@ -39,7 +39,7 @@ class timer:
         def myfunc(...)
             ...
 
-    As a block timer:
+    As a block timer::
 
         with timer(name='block 1'):
             ...
