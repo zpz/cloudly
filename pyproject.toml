@@ -10,8 +10,11 @@ authors = [
 ]
 dependencies = [
     "filelock",
+    "httpcore",
+    "httpx",
     "orjson",
     "pyarrow",
+    "tenacity",
     "tqdm",
     "typing-extensions",
     "zstandard",
