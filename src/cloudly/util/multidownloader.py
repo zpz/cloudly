@@ -13,27 +13,19 @@ from mpservice.threading import Thread
 logger = logging.getLogger(__name__)
 
 
-class ImageDownloadError(RuntimeError):
+class NotFoundError(Exception):
     pass
 
 
-class ImageNotFoundError(ImageDownloadError):
+class RequestForbiddenError(Exception):
     pass
 
 
-class RequestForbiddenError(ImageDownloadError):
+class ConnectionError(Exception):
     pass
 
 
-class ImageServiceNotKnownError(ImageDownloadError):
-    pass
-
-
-class ConnectionError(ImageDownloadError):
-    pass
-
-
-class TimeoutError(ImageDownloadError):
+class TimeoutError(Exception):
     pass
 
 
@@ -346,17 +338,10 @@ async def aiohttp_download_image(
             image_bytes = await response.read()
     except aiohttp.ClientResponseError as e:
         if e.status == 404:
-            raise ImageNotFoundError(url) from e
+            raise NotFoundError(url) from e
         if e.status == 403:
             raise RequestForbiddenError(url) from e
         raise
-    except aiohttp.ClientOSError as e:
-        if 'Connection reset by peer' in str(e):
-            # TODO: retry a couple times?
-            raise ConnectionError(url) from e
-        raise
-    except asyncio.TimeoutError as e:
-        raise TimeoutError(url) from e
 
     # There may be other types of errors
 
