@@ -3,32 +3,12 @@ from __future__ import annotations
 import io
 import logging
 import pickle
-from contextlib import contextmanager
-from time import perf_counter
 
-import httpcore
 import httpx
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_random_exponential,
-)
-
-from cloudly.util.serializer import (
-    OrjsonSerializer,
-    PickleSerializer,
-)
 
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
-
-
-class RequestTimeoutError(RuntimeError):
-    # Connection timed out from the client side;
-    # no meaningful response was received from the server.
-    pass
 
 
 # You may want to customize the `httpx.Timeout` and `httpx.Limits` values
@@ -53,8 +33,24 @@ class RequestTimeoutError(RuntimeError):
 # The `httpx.Client` class supports context management.
 
 
-# Fix httpx.HTTPStatusError pickle error, as of at least httpx version 0.23.3
+# Fix httpx.HTTPStatusError pickle error, as of at least httpx version 0.28.1
 # https://github.com/encode/httpx/issues/1990
+#
+# As of httpx 0.28.1, there's a bug that makes instances of httpx.HTTPStatusError
+# un-pickleable. The error message is
+#
+# >>> err = httpx.HTTPStatusError(...)
+# >>> y = pickle.dumps(err)
+# >>> z = pickle.loads(y)
+# >>> pickle.loads(pickle.dumps(y))
+# Traceback (most recent call last):
+# File "<stdin>", line 1, in <module>
+# TypeError: __init__() missing 2 required keyword-only arguments: 'request' and 'response'
+#
+# __init__() missing 2 required keyword-only arguments: 'request' and 'response'
+# >>>
+#
+# The following hack fixes this problem.
 try:
     err = httpx.HTTPStatusError('error', request=None, response=None)
     _ = pickle.loads(pickle.dumps(err))
@@ -69,99 +65,46 @@ except TypeError:
     httpx.HTTPStatusError.__reduce__ = _reduce_
 
 
-def get_response_data(response):
-    """
-    In httpx client code, use this function to parse data out of
-    the response object returned from a HTTP request.
-    """
-    response_content_type = response.headers.get('content-type', '')
-    if response_content_type.startswith('text/plain'):
-        data = response.text
-    elif response_content_type == 'application/json':
-        data = response.json()
-    elif response_content_type == 'application/orjson-stream':
-        data = OrjsonSerializer.deserialize(response.content)
-    elif response_content_type == 'application/pickle-stream':
-        data = PickleSerializer.deserialize(response.content)
-    # handle other types as needed
-    elif response_content_type.startswith('image/'):
-        data = response.content
-    elif response_content_type.startswith('text/html; charset=utf-8'):
-        data = response.text
-    else:
-        data = response
-    return data
-
-
-async def a_get_response_data(response):
-    """
-    In httpx client code, use this function to parse data out of
-    the response object returned from a HTTP request.
-    """
-    response_content_type = response.headers.get('content-type', '')
-    if response_content_type.startswith('text/plain'):
-        data = response.text
-    elif response_content_type == 'application/json':
-        data = response.json()
-    elif response_content_type == 'application/orjson-stream':
-        data = OrjsonSerializer.deserialize(await response.aread())
-    elif response_content_type == 'application/pickle-stream':
-        data = PickleSerializer.deserialize(await response.aread())
-    # handle other types as needed
-    elif response_content_type.startswith('image/'):
-        data = response.content
-    elif response_content_type.startswith('text/html; charset=utf-8'):
-        data = response.text
-    else:
-        data = response
-    return data
-
-
-def rest_request(
-    url,
-    method,
-    *,
-    session: httpx.Client,
-    payload=None,
-    payload_type: str = None,
-    _stream: bool = False,  # experimental
-    **kwargs,
-):
-    """
-    Note: this is a sync function. For repeated use, this may be used in threads
-    in a streaming pipeline or in an async context.
-    """
+def _get_payload_args(method, payload, payload_type, **kwargs):
+    method = method.lower()
     args = {}
-    if method in ('get', 'GET'):
-        if payload_type is None:
-            payload_type = 'json'
-        else:
-            assert payload_type == 'json'
+    if method == 'get':
         if payload:
             args = {'params': payload}
-    elif method in ('post', 'POST'):
-        if payload:
-            if payload_type is None:
+            if payload_type:
+                assert payload_type == 'json'
+            else:
                 payload_type = 'json'
+    elif method == 'post':
+        if payload:
             if isinstance(payload, bytes):
-                args = {'content': io.BytesIO(payload)}
-            elif payload_type == 'text':
-                args = {'content': io.BytesIO(payload.encode())}
+                args = {'content': payload}
+                assert payload_type and payload_type not in ('json', 'text')
+                payload_type = 'application/' + payload_type
+                # The corresponding server code will handle the received bytes
+                # according to the payload type. User can design custom data types
+                # here as long as the client and server sides have agreement on
+                # how to handle it. The caller of this function is responsible for
+                # converting the data to bytes; the server is responsible for
+                # converting the received bytes to custom data type according
+                # to insider knowledge about the data type, as signaled by the value
+                # of `payload_type`, which can be a custom value.
+            elif isinstance(payload, str):
+                args = {'content': payload.encode()}
+                if payload_type:
+                    assert payload_type == 'text'
                 payload_type = 'text/plain'
             else:
-                if payload_type == 'json':
-                    args = {'json': payload}
-                elif payload_type == 'orjson_stream':
-                    args = {'content': io.BytesIO(OrjsonSerializer.serialize(payload))}
-                elif payload_type == 'pickle-stream':
-                    args = {'content': io.BytesIO(PickleSerializer.serialize(payload))}
-                else:
-                    raise ValueError(f"payload_type '{payload_type}' is not supported")
-                payload_type = 'application/' + payload_type
-    elif method in ('put', 'PUT'):
+                if payload_type:
+                    assert payload_type == 'json'
+                args = {'json': payload}
+                payload_type = 'application/json'
+    elif method == 'put':
         if payload:
             args = {'content': payload}
-    elif method in ('delete', 'DELETE'):
+            if not payload_type:
+                payload_type = 'application/json'
+    elif method == 'delete':
         assert not payload
     else:
         raise ValueError('unknown method', method)
@@ -173,125 +116,43 @@ def rest_request(
         else:
             kwargs['headers'] = {'content-type': payload_type}
 
-    try:
-        if _stream:
-            response = session.stream(method, url, **kwargs)
-            return response
-        else:
-            response = getattr(session, method.lower())(url, **kwargs)
-    except httpx.ConnectTimeout as e:
-        raise RequestTimeoutError() from e
-
-    try:
-        response.raise_for_status()
-        # This may raise `httpx.HTTPStatusError` (among others).
-        # As of httpx 0.23.3, there's abug that makes this exception object
-        # un-pickleable. The error message is
-        #
-        # >>> err = httpx.HTTPStatusError(...)
-        # >>> y = pickle.dumps(err)
-        # >>> z = pickle.loads(y)
-        # >>> pickle.loads(pickle.dumps(y))
-        # Traceback (most recent call last):
-        # File "<stdin>", line 1, in <module>
-        # TypeError: __init__() missing 2 required keyword-only arguments: 'request' and 'response'
-        #
-        # __init__() missing 2 required keyword-only arguments: 'request' and 'response'
-        # >>>
-        #
-        # This httpx bug is fixed by the `__reduce__` hack earlier in this module.
-    except httpx.HTTPStatusError as e:
-        if response.headers.get('content-type') is None and response.extensions[
-            'reason_phrase'
-        ].endsth(b'connect: operation timed out'):
-            raise RequestTimeoutError(
-                response.status_code,  # 403
-                response.extension['reason_phrase'],
-            ) from e
-            # TODO: look into how long it took `rest_request` to raise
-            # this exception. It seems shorter than the `timeout` arg to `session`,
-            # which is 60 seconds by default.
-        else:
-            raise
-    else:
-        return get_response_data(response)
+    return method, kwargs
 
 
-@contextmanager
-def stream_request(*args, **kwargs):
-    with rest_request(*args, _stream=True, **kwargs) as response:
-        try:
-            response.raise_for_status()
-        except httpx.HTTPStatusError as e:
-            if response.headers.get('content-type') is None and response.extensions[
-                'reason_phrase'
-            ].endsth(b'connect: operation timed out'):
-                raise RequestTimeoutError(
-                    response.status_code,  # 403
-                    response.extension['reason_phrase'],
-                ) from e
-                # TODO: look into how long it took `rest_request` to raise
-                # this exception. It seems shorter than the `timeout` arg to `session`,
-                # which is 60 seconds by default.
-            else:
-                raise
-        else:
-            yield response
+def rest_request(
+    url,
+    method,
+    *,
+    session: httpx.Client,
+    payload=None,
+    payload_type: str = None,
+    **kwargs,
+):
+    """
+    Note: this is a sync function. For repeated use, this may be used in threads
+    in a streaming pipeline or in an async context.
+    """
+    method, kwargs = _get_payload_args(method, payload, payload_type, **kwargs)
+    if 'content' in kwargs and isinstance(kwargs['content'], bytes):
+        kwargs['content'] = io.BytesIO(kwargs['content'])
 
+    response = getattr(session, method)(url, **kwargs)
+    # This could raise `httpx.ConnectTimeout`.
+    response.raise_for_status()
+    # This may raise `httpx.HTTPStatusError`.
+    # User can look into the specific issues by checking the properties
+    # `request` and `response` of this exception instance.
 
-@retry(
-    reraise=True,
-    stop=stop_after_attempt(10),
-    wait=wait_random_exponential(multiplier=1, max=60),
-    retry=retry_if_exception_type(
-        (
-            httpx.TimeoutException,
-            httpcore.TimeoutException,
-            httpx.RemoteProtocolError,
-            httpcore.RemoteProtocolError,
-            httpx.ReadError,
-            httpcore.ReadError,
-        )
-    ),
-)
-async def _a_request(func, url, **kwargs):
-    time0 = perf_counter()
-    try:
-        response = await func(url, **kwargs)
-        return response
-    except (httpx.TimeoutException, httpcore.TimeoutException) as e:
-        time1 = perf_counter()
-        timeout_duration = time1 - time0
-        logger.error(
-            'HTTP request timed out after %d seconds with %s: %s',
-            timeout_duration,
-            e.__class__.__name__,
-            str(e),
-        )
-        raise
-    except (httpx.RemoteProtocolError, httpcore.RemoteProtocolError) as e:
-        time1 = perf_counter()
-        timeout_duration = time1 - time0
-        logger.error(
-            'HTTP request timed out after %d seconds with %s: %s',
-            timeout_duration,
-            e.__class__.__name__,
-            str(e),
-        )
-        raise
-    except ConnectionError as e:
-        time1 = perf_counter()
-        timeout_duration = time1 - time0
-        logger.error(
-            'HTTP request timed out after %d seconds with %s: %s',
-            timeout_duration,
-            e.__class__.__name__,
-            str(e),
-        )
-        raise
-    except Exception as e:
-        logger.error('%s: %s', e.__class__.__name__, e)
-        raise
+    response_content_type = response.headers.get('content-type', '')
+    if response_content_type.startswith('text/'):
+        return response.text
+    if response_content_type == 'application/json':
+        return response.json()
+    if response_content_type.startswith('image/'):
+        return response.content
+    if response_content_type.startswith('application/'):
+        return response.content
+    return response
 
 
 async def a_rest_request(
@@ -306,76 +167,30 @@ async def a_rest_request(
     """
     Make an sync call to a REST API.
 
-    `payload` is a Python native type, usually `dict.
+    `payload` is a Python native type, usually `dict`.
 
     The client `session` is managed by the caller.
     """
-    args = {}
-    if method in ('get', 'GET'):
-        func = session.get
-        if payload_type is None:
-            payload_type = 'json'
-        else:
-            assert payload_type == 'json'
-        if payload:
-            args = {'params': payload}
-    elif method in ('post', 'POST'):
-        func = session.post
-        if payload:
-            # TODO: should 'data' be 'content' instead?
-            if payload_type is None:
-                payload_type = 'json'
-            if isinstance(payload, bytes):
-                args = {'content': io.BytesIO(payload)}
-            elif payload_type == 'text':
-                args = {'content': payload.encode()}
-                payload_type = 'text/plain'
-            else:
-                if payload_type == 'json':
-                    args = {'json': payload}
-                elif payload_type == 'orjson_stream':
-                    args = {'content': OrjsonSerializer.serialize(payload)}
-                elif payload_type == 'pickle-stream':
-                    args = {'content': PickleSerializer.serialize(payload)}
-                else:
-                    raise ValueError(f"payload_type '{payload_type}' is not supported")
-                payload_type = 'application/' + payload_type
-    elif method in ('put', 'PUT'):
-        func = session.put
-        if payload:
-            args = {'content': payload}
-    elif method in ('delete', 'DELETE'):
-        func = session.delete
-        assert not payload
-    else:
-        raise ValueError('unknown method', method)
+    method, kwargs = _get_payload_args(method, payload, payload_type, **kwargs)
+    # Note: in contrast to the sync version, the `content` bytes are not put in
+    # a `io.BytesIO`.
 
-    kwargs = {**args, **kwargs}
-    if payload_type:
-        if 'headers' in kwargs:
-            kwargs['headers'].setdefault('content-type', payload_type)
-        else:
-            kwargs['headers'] = {'content-type': payload_type}
+    response = await getattr(session, method)(url, **kwargs)
+    # I've observed these exceptions:
+    #   httpx.TimeoutException, httpcore.TimeoutException
+    #   httpx.RemoteProtocolError, httpcore.RemoteProtocolError
+    #   httpx.ReadError, httpcore.ReadError
+    #   ConnectionError
 
-    try:
-        response = await _a_request(func, url, **kwargs)
-    except httpx.ConnectTimeout as e:
-        raise RequestTimeoutError() from e
+    response.raise_for_status()
 
-    try:
-        response.raise_for_status()
-    except httpx.HTTPStatusError as e:
-        if response.headers.get('content-type') is None and response.extensions[
-            'reason_phrase'
-        ].endsth(b'connect: operation timed out'):
-            raise RequestTimeoutError(
-                response.status_code,  # 403
-                response.extension['reason_phrase'],
-            ) from e
-            # TODO: look into how long it took `rest_request` to raise
-            # this exception. It seems shorter than the `timeout` arg to `session`,
-            # which is 60 seconds by default.
-        else:
-            raise
-    else:
-        return await a_get_response_data(response)
+    response_content_type = response.headers.get('content-type', '')
+    if response_content_type.startswith('text/'):
+        return response.text
+    if response_content_type == 'application/json':
+        return response.json()
+    if response_content_type.startswith('image/'):
+        return await response.aread()
+    if response_content_type.startswith('application/'):
+        return await response.aread()
+    return response
