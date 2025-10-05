@@ -9,9 +9,11 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
+    "aiohttp",
     "filelock",
     "httpx",
     "orjson",
+    "mpservice",
     "pyarrow",
     "tqdm",
     "typing-extensions",
