@@ -119,7 +119,7 @@ def _get_payload_args(method, payload, payload_type, **kwargs):
     return method, kwargs
 
 
-def rest_request(
+def request(
     url,
     method,
     *,
@@ -155,7 +155,7 @@ def rest_request(
     return response
 
 
-async def a_rest_request(
+async def a_request(
     url,
     method,
     *,
