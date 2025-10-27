@@ -13,7 +13,9 @@ Utilities
 
    datetime
    docker
+   http_client
    logging
+   multidownloader
    multiplexer
    ratelimit
    serializer
