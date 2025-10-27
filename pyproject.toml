@@ -9,7 +9,6 @@ authors = [
     {name = "Zepu Zhang", email = "zepu.zhang@gmail.com"},
 ]
 dependencies = [
-    "aiohttp",
     "filelock",
     "httpx",
     "orjson",
@@ -76,9 +75,8 @@ test = [
     "pytest-mock",
     "boltons",
     "lz4",
-    "orjson",
-    "mpservice",
     "Pillow",
+    "aiohttp",
 ]
 
 

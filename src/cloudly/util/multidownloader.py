@@ -9,7 +9,7 @@ import aiohttp
 from mpservice.streamer import fifo_stream
 from mpservice.threading import Thread
 
-# `mpservice` is not listed as a dependency for `cloudly`.
+# `aiohttp` is  not listed as a dependency of `cloudly`.
 # Just install it if you use the current module.
 
 logger = logging.getLogger(__name__)
