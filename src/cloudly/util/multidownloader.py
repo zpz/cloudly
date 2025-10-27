@@ -4,11 +4,13 @@ import queue
 import threading
 from collections.abc import Iterable, Iterator
 from multiprocessing.util import Finalize
-from typing import Awaitable
 
 import aiohttp
 from mpservice.streamer import fifo_stream
 from mpservice.threading import Thread
+
+# `mpservice` is not listed as a dependency for `cloudly`.
+# Just install it if you use the current module.
 
 logger = logging.getLogger(__name__)
 
@@ -17,37 +19,17 @@ class NotFoundError(Exception):
     pass
 
 
-class RequestForbiddenError(Exception):
-    pass
-
-
-class ConnectionError(Exception):
-    pass
-
-
-class TimeoutError(Exception):
-    pass
-
-
 # NOTE: beware of the cache when speed benchmarking.
 # TODO: the cache is based on time; can we base on frequency of use?
 class Multidownloader:
     def __init__(
         self,
-        downloader: Awaitable,
         *,
         cache_size: int = 10_000,
         num_downloaders: int = 100,
         timeout: int | float = 5,
     ):
         """
-        download
-            An async function that does the actual downloading.
-            The function takes the asset URL as the first, positional arg.
-            Further, it takes the mandatory keyword arg `session: aiohttp.ClientSession`,
-            and other optional keyword args.
-
-            See :class:`ImageDownloader` for an example.
         cache_size
             The cache acts as both an input rate limiter and a result cache.
             If ``url0`` has been submitted and still downloading, another submission
@@ -71,7 +53,6 @@ class Multidownloader:
         """
         assert num_downloaders > 0
         assert cache_size >= num_downloaders
-        self._downloader = downloader
         self._num_downloaders = num_downloaders
         self._cache_size = cache_size
         self._cache_watermark = cache_size // 2
@@ -124,15 +105,14 @@ class Multidownloader:
         loop = asyncio.new_event_loop()
         loop.run_until_complete(main(loop, to_shutdown))
 
-    async def _a_download(self, url, *, session, sem, **kwargs):
+    async def a_download(self, url: str, *, session, sem, **kwargs):
+        # A typical application would customize this method in a subclass.
+        # See :class:`ImageDownloader` for an example.
         async with sem:
-            return await self._downloader(
-                url,
-                session=session,
-                **kwargs,
-            )
+            async with session.get(url, **kwargs) as response:
+                return await response.read()
 
-    def submit(self, url: str, **download_kwargs) -> str:
+    def submit(self, url: str | dict, **download_kwargs) -> str:
         """
         Submit an asset URL for downloading.
         The returned "key" is to be used later with :meth:`redeem` for retrieving the result.
@@ -144,15 +124,16 @@ class Multidownloader:
         # We may have a cache-ful of requests submitted,
         # and then the actual downloading is further controlled by "sem"
         # in the download function.
+        key = str(url)
         with self._cache_not_full:
-            entry = self._cache.pop(url, None)
+            entry = self._cache.pop(key, None)
             if entry is not None:
                 # The url is in the cache.
                 # The downloading for this url may or may not have finished.
                 entry['n_submit'] += 1
-                self._cache[url] = entry
-                # Put to end of cache, noting that dict preserves insertion order.
-                return url
+                self._cache[key] = entry
+                # Put at end of cache, noting that dict preserves insertion order.
+                return key
 
             while len(self._cache) >= self._cache_size:
                 # Wait for calls to ``self.redeem`` to make some space.
@@ -163,25 +144,34 @@ class Multidownloader:
 
             # Now after waking up, situation may have changed.
             # Maybe another thread has just submitted this url.
-            entry = self._cache.get(url)
+            entry = self._cache.get(key)
             if entry is not None:
                 entry['n_submit'] += 1
                 # This time, do not pop and add at end,
                 # b/c it's a recent addition, it must be at or near the end already.
-                return url
+                return key
 
             loop, sess, sem = self._worker
+            if not isinstance(url, str):
+                # `url` is a dict containing `url` and other keyword args.
+                download_kwargs = {**download_kwargs, **url}
+                # For the same kwarg specified by both `download_kwargs` and `url`,
+                # the value in `url` takes precedence, b/c it is a more specific
+                # spec, that is, it is specified along with one particular URL,
+                # whereas the `download_kwargs` to this function are supposed to be unchanging
+                # in repeated calls to this function for multiple requests.
+                url = download_kwargs.pop('url')
             fut = asyncio.run_coroutine_threadsafe(
-                self._a_download(url, session=sess, sem=sem, **download_kwargs),
+                self.a_download(url, session=sess, sem=sem, **download_kwargs),
                 loop,
             )
             # Request the (async) download to execute in the worker thread,
             # which manages an async loop. Once the execution finishes,
             # the result will populate the Future object `fut`.
 
-            self._cache[url] = {'fut': fut, 'n_submit': 1, 'n_redeem': 0}
+            self._cache[key] = {'fut': fut, 'n_submit': 1, 'n_redeem': 0}
 
-        return url
+        return key
 
     def redeem(self, key: str, *, return_exception: bool = False) -> bytes:
         """
@@ -246,13 +236,15 @@ class Multidownloader:
             return False
         return fut.cancel()
 
-    def get(self, url: str, *, return_exception=False, **download_kwargs) -> bytes:
+    def get(
+        self, url: str | dict, *, return_exception=False, **download_kwargs
+    ) -> bytes:
         key = self.submit(url, **download_kwargs)
         return self.redeem(key, return_exception=return_exception)
 
     def stream(
         self,
-        urls: Iterable[str],
+        urls: Iterable[str | dict],
         *,
         return_x: bool = False,
         return_exceptions: bool = False,
@@ -261,7 +253,7 @@ class Multidownloader:
     ) -> Iterator:
         """
         urls
-            Usually a stream of asset URLs, but see ``preprocessor``
+            Usually a stream of asset URLs, but see ``preprocessor``.
         preprocessor
             A function that takes the input (one element of ``urls``)
             and returns the url. This is used in streaming where the input
@@ -312,42 +304,34 @@ class Multidownloader:
         )
 
 
-# This function is not expected to be used directly by end-user.
-# It is used by ImageDownloader.
-async def aiohttp_download_image(
-    url: str,
-    *,
-    height: int = None,
-    width: int = None,
-    session: aiohttp.ClientSession,
-) -> bytes:
-    if height and width:
-        image_params = f'?odnHeight={height}&odnWidth={width}&odnBg=FFFFFF'
-        url = url + image_params
-    elif height is None and width is None:
-        pass
-    else:
-        raise ValueError(
-            f"'height' is {height} while 'width' is {width}. "
-            f'Both of the them need to be integer if image needs to be resized, '
-            f'otherwise BOTH of them need to be None'
-        )
-
-    try:
-        async with session.get(url, raise_for_status=True) as response:
-            image_bytes = await response.read()
-    except aiohttp.ClientResponseError as e:
-        if e.status == 404:
-            raise NotFoundError(url) from e
-        if e.status == 403:
-            raise RequestForbiddenError(url) from e
-        raise
-
-    # There may be other types of errors
-
-    return image_bytes
-
-
 class ImageDownloader(Multidownloader):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, downloader=aiohttp_download_image, **kwargs)
+    async def a_download(
+        self, url, *, session, sem, height: int = None, width: int = None
+    ) -> bytes:
+        async with sem:
+            if height and width:
+                image_params = f'?odnHeight={height}&odnWidth={width}&odnBg=FFFFFF'
+                url = url + image_params
+            elif height is None and width is None:
+                pass
+            else:
+                raise ValueError(
+                    f"'height' is {height} while 'width' is {width}. "
+                    f'Both of the them need to be integer if image needs to be resized, '
+                    f'otherwise BOTH of them need to be None'
+                )
+
+            try:
+                async with session.get(url, raise_for_status=True) as response:
+                    image_bytes = await response.read()
+            except aiohttp.ClientResponseError as e:
+                if e.status == 404:
+                    raise NotFoundError(url) from e
+                    # We special-case this error because in a stream of image requests,
+                    # some image URLs might be erronous, causing this error,
+                    # but we don't want them to halt the other downloads, yet
+                    # we still want to know image URLs that caused this error.
+                raise
+
+            # There may be other types of errors
+            return image_bytes

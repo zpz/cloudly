@@ -17,7 +17,7 @@ Utilities
    logging
    multidownloader
    multiplexer
-   ratelimit
+   ratelimiter
    serializer
    seq
    timer

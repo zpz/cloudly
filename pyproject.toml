@@ -77,6 +77,8 @@ test = [
     "boltons",
     "lz4",
     "orjson",
+    "mpservice",
+    "Pillow",
 ]
 
 

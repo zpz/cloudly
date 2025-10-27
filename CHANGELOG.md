@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - New module `cloudly.util.http_client`.
 - New module `cloudly.util.multidownloader`.
+- Renamed `cloudly.util.ratelimit` to `cloudly.util.ratelimiter`.
 
 
 ## [0.3.7] - 2025-09-13
