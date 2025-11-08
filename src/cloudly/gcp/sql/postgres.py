@@ -299,7 +299,7 @@ class Connection(pg8000.Connection):
         cu.__class__ = Cursor
         return cu
 
-    def execute(self, sql, args=None) -> Cursor:
+    def execute(self, sql, args=tuple()) -> Cursor:
         """
         `pg8000.Connection.execute` is very different from `psycopg.Connection.execute`.
         """
@@ -307,7 +307,7 @@ class Connection(pg8000.Connection):
 
 
 class Cursor(pg8000.Cursor):
-    def execute(self, sql, args=None):
+    def execute(self, sql, args=tuple()):
         """
         `pg800.Cursor.execute` returns None.
         """
