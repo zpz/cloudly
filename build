@@ -1,8 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 python3 -m minidocker.py build \
-    --parent=zppz/py310:25.09.12 \
-    -e GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID} \
-    -v $(dirname ${GCP_APP_CREDENTIALS}):/tmp/gcp_creds \
-    -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_creds/$(basename ${GCP_APP_CREDENTIALS})
+    --parent=$(python3 -m minidocker find-local-image zppz/py312)
+    # -e GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID} \
+    # -v $(dirname ${GCP_APP_CREDENTIALS}):/tmp/gcp_creds \
+    # -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_creds/$(basename ${GCP_APP_CREDENTIALS})
 

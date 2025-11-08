@@ -293,20 +293,21 @@ class Instance:
 
 
 class Connection(pg8000.Connection):
+    # TODO: keep one cursor to be reused?
     def cursor(self) -> Cursor:
         cu = super().cursor()
         cu.__class__ = Cursor
         return cu
 
-    def execute(self, sql) -> Cursor:
+    def execute(self, sql, args=None) -> Cursor:
         """
         `pg8000.Connection.execute` is very different from `psycopg.Connection.execute`.
         """
-        return self.cursor().execute(sql)
+        return self.cursor().execute(sql, args)
 
 
 class Cursor(pg8000.Cursor):
-    def execute(self, sql, *args):
+    def execute(self, sql, args=None):
         """
         `pg800.Cursor.execute` returns None.
         """
