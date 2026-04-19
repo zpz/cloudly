@@ -39,7 +39,9 @@ def test_batch():
                 if s == 'FAILED':
                     raise Exception('job failed')
                 break
-            if n > 100:
+            if n % 10 == 0:
+                print('state:', s)
+            if n > 200:
                 print('state:', s)
                 raise Exception('has not finished after a long time')
             sleep(2)

@@ -9,12 +9,13 @@ import concurrent.futures
 import http
 import logging
 import time
+import warnings
 from multiprocessing.util import Finalize
 from typing import Literal
 
 import google.auth
 import pg8000
-from google.api_core.exceptions import NotFound
+from google.api_core.exceptions import AlreadyExists, NotFound
 from google.cloud.sql.connector import Connector, IPTypes
 from googleapiclient import discovery
 from googleapiclient.errors import HttpError
@@ -130,12 +131,17 @@ class Instance:
                 },
             },
         }
-        op = (
-            get_client()
-            .instances()
-            .insert(project=get_project_id(), body=config)
-            .execute()
-        )
+        try:
+            op = (
+                get_client()
+                .instances()
+                .insert(project=get_project_id(), body=config)
+                .execute()
+            )
+        except HttpError as e:
+            if e.error_details[0]['reason'] == 'instanceAlreadyExists':
+                raise AlreadyExists(f"instance '{instance_name}' already exists") from e
+            raise
         _wait_on_operation(op['name'])
         return instance_name
 
@@ -262,7 +268,12 @@ class Instance:
     def delete(self) -> None:
         replicas = self.replica_names
         if replicas:
-            delete_load_balancer(self.name, f'{self.region}-a')
+            try:
+                delete_load_balancer(self.name, f'{self.region}-a')
+            except NotFound:
+                warnings.warn(
+                    f'load balancer for {self.name} was not found; ignored for now; please investigate!'
+                )
             for name in replicas:
                 self._delete(name, wait=False)
             t0 = time.perf_counter()

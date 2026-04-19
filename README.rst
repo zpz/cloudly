@@ -11,6 +11,8 @@ Besides ``biglist`` and ``upathlib``, the subpackage ``cloudly.gcp`` is growing 
 
 Read the `documentation <https://cloudly.readthedocs.io/en/latest/>`_.
 
+Developed and tested on Python 3.12.
+
 Licence
 -------
 
