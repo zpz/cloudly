@@ -5,7 +5,7 @@ from threading import Thread
 
 import pytest
 
-from cloudly.util.ratelimit import AsyncRateLimiter, Empty, Full, RateLimiter, Ring
+from cloudly.util.ratelimiter import AsyncRateLimiter, Empty, Full, RateLimiter, Ring
 
 
 def test_ring():

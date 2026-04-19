@@ -1,6 +1,6 @@
 import pytest
 
-from cloudly.experimental.sql.postgres import database, list_databases
+from cloudly.sql.postgres import database, list_databases
 from cloudly.gcp.sql.postgres import Instance, connect
 
 REGION = 'us-west1'

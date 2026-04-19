@@ -10,7 +10,9 @@ authors = [
 ]
 dependencies = [
     "filelock",
+    "httpx",
     "orjson",
+    "mpservice",
     "pyarrow",
     "tqdm",
     "typing-extensions",
@@ -73,8 +75,10 @@ test = [
     "pytest-mock",
     "boltons",
     "lz4",
-    "orjson",
+    "Pillow",
+    "aiohttp",
 ]
+
 
 
 # See https://beta.ruff.rs/docs/rules/

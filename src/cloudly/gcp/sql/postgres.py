@@ -175,7 +175,7 @@ class Instance:
         root_password: str,
         # network_uri: str | None = None,
         # subnet_uri: str | None = None,
-        postgres_version: str = '16',
+        postgres_version: str = '17',
         num_read_replicas: int = 0,
         load_balancer_machine_type: str | None = None,
         **kwargs,
@@ -293,20 +293,21 @@ class Instance:
 
 
 class Connection(pg8000.Connection):
+    # TODO: keep one cursor to be reused?
     def cursor(self) -> Cursor:
         cu = super().cursor()
         cu.__class__ = Cursor
         return cu
 
-    def execute(self, sql) -> Cursor:
+    def execute(self, sql, args=tuple()) -> Cursor:
         """
         `pg8000.Connection.execute` is very different from `psycopg.Connection.execute`.
         """
-        return self.cursor().execute(sql)
+        return self.cursor().execute(sql, args)
 
 
 class Cursor(pg8000.Cursor):
-    def execute(self, sql, *args):
+    def execute(self, sql, args=tuple()):
         """
         `pg800.Cursor.execute` returns None.
         """
