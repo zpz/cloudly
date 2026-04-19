@@ -6,12 +6,7 @@ if [[ "$MSYSTEM" == "MINGW64" ]]; then
     winpty python3 -m minidocker.py run \
         -e GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID} \
         -v /$(dirname ${GCP_APP_CREDENTIALS}):/tmp/gcp_creds \
-        -e GOOGLE_APPLICATION_CREDENTIALS=//tmp/gcp_creds/$(basename ${GCP_APP_CREDENTIALS}) \
-        -e SCHWAB_APP_CALLBACKURL=${SCHWAB_APP_CALLBACKURL} \
-        -e SCHWAB_APP_KEY=${SCHWAB_APP_KEY} \
-        -e SCHWAB_APP_SECRET=${SCHWAB_APP_SECRET} \
-        -v /$(dirname ${SCHWAB_TOKEN_PATH}):/tmp/trade_creds \
-        -e SCHWAB_APP_TOKEN_PATH=//tmp/trade_creds/$(basename ${SCHWAB_TOKEN_PATH}) \
+        -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_creds/$(basename ${GCP_APP_CREDENTIALS}) \
         cloudly:dev
 else
     python3 -m minidocker.py run \

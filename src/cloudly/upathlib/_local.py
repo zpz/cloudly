@@ -208,10 +208,10 @@ class LocalUpath(Upath, os.PathLike):
             shutil.rmtree(self.path)
         return n
 
-    def remove_file(self) -> None:
+    def remove_file(self, missing_ok: bool = False) -> None:
         """Remove the current file."""
         try:
-            self.path.unlink()
+            self.path.unlink(missing_ok=missing_ok)
         except PermissionError as e:  # this happens on Windows if `self` is a dir.
             if self.is_dir():
                 raise IsADirectoryError(f"Is a directory: '{self}'") from e

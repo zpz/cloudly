@@ -794,10 +794,10 @@ class Upath(abc.ABC):
         return n
 
     @abc.abstractmethod
-    def remove_file(self) -> None:
+    def remove_file(self, missing_ok: bool=False) -> None:
         """Remove the current file (i.e. ``self``).
 
-        If ``self`` is not an existing file, ``FileNotFoundError`` is raised.
+        If ``self`` is not an existing file, ``FileNotFoundError`` is raised, unless `missing_ok` is True.
         If the file exists but can't be removed, the platform-dependent
         exception is propagated.
         """

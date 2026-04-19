@@ -175,7 +175,7 @@ class Instance:
         root_password: str,
         # network_uri: str | None = None,
         # subnet_uri: str | None = None,
-        postgres_version: str = '16',
+        postgres_version: str = '17',
         num_read_replicas: int = 0,
         load_balancer_machine_type: str | None = None,
         **kwargs,

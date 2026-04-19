@@ -610,14 +610,15 @@ class GcsBlobUpath(BlobUpath):
             p.delete()
         return z
 
-    def remove_file(self) -> None:
+    def remove_file(self, missing_ok: bool = False) -> None:
         """
         Remove the current blob.
         """
         try:
             self._blob().delete(client=self._client())
         except NotFound as e:
-            raise FileNotFoundError(f"No such file: '{self}'") from e
+            if not missing_ok:
+                raise FileNotFoundError(f"No such file: '{self}'") from e
 
     def riterdir(self) -> Iterator[Self]:
         """
