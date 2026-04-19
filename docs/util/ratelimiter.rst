@@ -1,5 +1,5 @@
-*********
-Ratelimit
-*********
+***********
+Ratelimiter
+***********
 
-.. automodule:: cloudly.util.ratelimit
+.. automodule:: cloudly.util.ratelimiter

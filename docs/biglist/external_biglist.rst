@@ -1,3 +1,12 @@
+
+.. _pyarrow: https://arrow.apache.org/docs/python/index.html
+.. _pyarrow.Array: https://arrow.apache.org/docs/python/generated/pyarrow.Array.html#pyarrow.Array
+.. _pyarrow.ChunkedArray: https://arrow.apache.org/docs/python/generated/pyarrow.ChunkedArray.html#pyarrow.ChunkedArray
+.. _pyarrow.parquet.ParquetFile: https://arrow.apache.org/docs/python/generated/pyarrow.parquet.ParquetFile.html
+.. _pyarrow.Table: https://arrow.apache.org/docs/python/generated/pyarrow.Table.html
+.. _pyarrow.RecordBatch: https://arrow.apache.org/docs/python/generated/pyarrow.RecordBatch.html#pyarrow.RecordBatch
+
+
 ***************
 ExternalBiglist
 ***************
@@ -151,13 +160,13 @@ We can get info about the row-groups, or even retrieve a row-group as the unit o
 <pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
   num_rows: 10
-  total_byte_size: 408
+  total_byte_size: 4...
   sorting_columns: ()
 >>> f0.metadata.row_group(0)  # doctest: +ELLIPSIS
 <pyarrow._parquet.RowGroupMetaData object at 0x7...>
   num_columns: 3
   num_rows: 10
-  total_byte_size: 408
+  total_byte_size: 4...
   sorting_columns: ()
 >>> rg = f0.row_group(0)
 >>> rg
@@ -224,7 +233,7 @@ Parquet is a *columnar* format.
 If we only need a subset of the columns, we should say so, so that the un-needed columns will
 not be loaded from disk (or cloud, as it may be).
 
-Both :class:`ParquetFileReader` and :class:`ParquetBatchData` provide the method :meth:`~ParquetFileReader.columns` 
+Both :class:`ParquetFileReader` and :class:`ParquetBatchData` provide the method :meth:`~ParquetFileReader.columns`
 (:meth:`~ParquetBatchData.columns`) to return a new object
 with only the selected columns.
 For ParquetFileReader, if data have not been loaded, reading of the new object will only load the selected columns.
@@ -277,7 +286,7 @@ Notice the type of the values (rows) returned from the element access methods: i
 Because there's only one column whose name is known, there is no need to carry that info with every row.
 Also note that the values have been converted to Python builtin types.
 The original `pyarrow`_ values will not look as nice:
-   
+
 >>> sales.scalar_as_py = False
 >>> Slicer(sales)[:3].collect()
 [{'sales': <pyarrow.Int64Scalar: 234>}, {'sales': <pyarrow.Int64Scalar: 235>}, {'sales': <pyarrow.Int64Scalar: 236>}]
@@ -308,10 +317,10 @@ and returns a
   ]
 ]
 
-:meth:`ParquetFileReader.column` returns a 
+:meth:`ParquetFileReader.column` returns a
 `pyarrow.ChunkedArray`_, whereas
-:meth:`ParquetBatchData.column` returns either a 
-pyarrow.ChunkedArray or a 
+:meth:`ParquetBatchData.column` returns either a
+pyarrow.ChunkedArray or a
 `pyarrow.Array`_.
 
 
@@ -326,7 +335,7 @@ We have seen :data:`ParquetFileReader.scalar_as_py`
 
 There are several ways to get to a `pyarrow`_ object quickly and proceed with it.
 A newly initiated :class:`ParquetFileReader` has not loaded any data yet.
-Its property :data:`~ParquetFileReader.file` initiates a 
+Its property :data:`~ParquetFileReader.file` initiates a
 `pyarrow.parquet.ParquetFile`_ object (reading meta data during initiation)
 and returns it. We may take it and go all the way down the `pyarrow`_ path:
 
@@ -363,8 +372,6 @@ year: [[1970,1971,1972,1973,1974,...,2016,2017,2018,2019,2020]]
 sales: [[123,124,125,126,127,...,169,170,171,172,173]]
 
 Finally, we have seen that :meth:`ParquetFileReader.column` and :meth:`ParquetBatchData.column`---the single-column selectors---return
-a `pyarrow`_ object. It is either a 
-`pyarrow.Array`_ or a 
+a `pyarrow`_ object. It is either a
+`pyarrow.Array`_ or a
 `pyarrow.ChunkedArray`_.
-
-
