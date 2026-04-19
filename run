@@ -3,7 +3,6 @@
 if [[ "$MSYSTEM" == "MINGW64" ]]; then
     # Running in Git Bash on Windows.
 
-    set -x
     winpty python3 -m minidocker.py run \
         -e GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID} \
         -v /$(dirname ${GCP_APP_CREDENTIALS}):/tmp/gcp_creds \

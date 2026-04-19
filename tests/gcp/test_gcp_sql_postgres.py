@@ -1,19 +1,33 @@
+import warnings
+
 import pytest
 
+from cloudly.gcp.sql.postgres import AlreadyExists, Instance, connect
 from cloudly.sql.postgres import database, list_databases
-from cloudly.gcp.sql.postgres import Instance, connect
 
 REGION = 'us-west1'
 
 
 @pytest.fixture(scope='session')
 def instance():
-    inst = Instance.create(
-        name='test-gcp-pg',
-        region=REGION,
-        root_password='rootuser',  # noqa: S106
-        num_read_replicas=1,
-    )
+    try:
+        inst = Instance.create(
+            name='test-gcp-pg',
+            region=REGION,
+            root_password='rootuser',  # noqa: S106
+            num_read_replicas=1,
+        )
+    except AlreadyExists:
+        warnings.warn(
+            "The GCP Postgres instance 'test-gcp-pg' already exists! Now deleting it and retrying..."
+        )
+        Instance('test-gcp-pg').delete()
+        inst = Instance.create(
+            name='test-gcp-pg',
+            region=REGION,
+            root_password='rootuser',  # noqa: S106
+            num_read_replicas=1,
+        )
     print(inst)
     try:
         yield inst
