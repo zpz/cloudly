@@ -4,7 +4,7 @@ import io
 import logging
 import pickle
 
-import httpx
+import httpx2 as httpx
 
 logging.getLogger('httpx').setLevel(logging.WARNING)
 
