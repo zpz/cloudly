@@ -1,17 +1,19 @@
 #!/usr/bin/env bash
 
-if [[ "$MSYSTEM" == "MINGW64" ]]; then
-    # Running in Git Bash on Windows.
-
-    winpty python3 -m minidocker.py run \
-        -e GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID} \
-        -v /$(dirname ${GCP_APP_CREDENTIALS}):/tmp/gcp_creds \
-        -e GOOGLE_APPLICATION_CREDENTIALS=//tmp/gcp_creds/$(basename ${GCP_APP_CREDENTIALS}) \
-        cloudly:dev
-else
-    python3 -m minidocker.py run \
-        -e GOOGLE_CLOUD_PROJECT=${GCP_PROJECT_ID} \
-        -v $(dirname ${GCP_APP_CREDENTIALS}):/tmp/gcp_creds \
-        -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/gcp_creds/$(basename ${GCP_APP_CREDENTIALS}) \
-        cloudly:dev
+if [[ "$(uname -o)" == "Msys" ]]; then
+    export MSYS2_ARG_CONV_EXCL='*'
 fi
+
+PROJHOME=$(pwd)
+PROJ=$(basename ${PROJHOME})
+DOCKERHOME=/home/docker-user/${PROJ}
+
+docker run \
+    --env-file=dev.env \
+    -v "$(dirname $(dirname ${PROJHOME}))/gcp_creds:/tmp/gcp_creds" \
+    -v "${PROJHOME}:${DOCKERHOME}" \
+    -w "${DOCKERHOME}" \
+    -e PYTHONPATH=${DOCKERHOME}/src \
+    -it --rm --init \
+    cloudly:dev $@
+
