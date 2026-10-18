@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from httpx import AsyncClient, Client
+from httpx2 import AsyncClient, Client
 
 from cloudly.util.http_client import a_request, request
 

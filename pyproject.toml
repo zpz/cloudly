@@ -10,7 +10,7 @@ authors = [
 ]
 dependencies = [
     "filelock",
-    "httpx",
+    "httpx2",
     "orjson",
     "mpservice",
     "pyarrow",

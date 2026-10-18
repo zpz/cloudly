@@ -1,8 +1,6 @@
 import math
 
 import pytest
-
-from cloudly.gcp.storage import GcsBlobUpath
 from cloudly.gcp.vertexai import init_global_config
 from cloudly.gcp.vertexai.vector_search import (
     BatchIndex,
@@ -11,6 +9,8 @@ from cloudly.gcp.vertexai.vector_search import (
     StreamIndex,
     make_datapoint,
 )
+
+from cloudly.gcp.storage import GcsBlobUpath
 
 init_global_config('us-west1')
 
