@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.3.9] - in progress
 
 - Replace dependency `httpx` by `httpx2`.
+- Improve build/run scripts.
 
 
 ## [0.3.8] - 2026-04-19
