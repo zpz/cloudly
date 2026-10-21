@@ -208,7 +208,7 @@ sudo /var/lib/haproxy/cfgupdate.sh {pg_master_instance_name}
             zone=zone,
             network_uri=network_uri,
             subnet_uri=subnet_uri,
-            machine_type=machine_type or 'n1-standard-1',
+            machine_type=machine_type or 'e2-small',
             startup_script=script,
         )
     )

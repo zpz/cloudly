@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+
 __all__ = ['Instance', 'connect']
 
 
@@ -9,7 +11,6 @@ import concurrent.futures
 import http
 import logging
 import time
-import warnings
 from multiprocessing.util import Finalize
 from typing import Literal
 
@@ -83,6 +84,8 @@ class Instance:
         storage_type: Literal['SSD', 'HDD'] | None = None,
         storage_size: str | None = None,
         labels: dict | None = None,
+        high_availability: bool = False,
+        backups: bool = False,
     ):
         """
         Parameters
@@ -114,6 +117,34 @@ class Instance:
             for k, v in labels.items()
         }
 
+        # All defaults are low-cost choices. They may not be suitable
+        # for a practice task.
+
+        tier = machine_type or 'db-f1-micro'
+        # db-perf-optimized-* tiers only exist in Enterprise Plus; everything else is plain Enterprise
+        edition = (
+            'ENTERPRISE_PLUS' if tier.startswith('db-perf-optimized') else 'ENTERPRISE'
+        )
+        size_gb = int(storage_size.upper().removesuffix('GB')) if storage_size else 10
+
+        settings = {
+            'tier': tier,
+            'edition': edition,
+            'userLabels': labels,
+            'dataDiskType': 'PD_HDD' if storage_type == 'HDD' else 'PD_SSD',
+            'dataDiskSizeGb': size_gb,
+            'storageAutoResize': False,
+            'deletionProtectionEnabled': False,
+            'ipConfiguration': {'ipv4Enabled': True},
+        }
+        if master_instance_name is None:  # these only apply to a primary
+            # TODO: if `high_availability` is True, `backups` should be True as well.
+            settings['availabilityType'] = 'REGIONAL' if high_availability else 'ZONAL'
+            settings['backupConfiguration'] = {
+                'enabled': backups,
+                'pointInTimeRecoveryEnabled': backups,
+            }
+
         # TODO: networking setup; other options
         config = {
             'name': instance_name,
@@ -121,15 +152,7 @@ class Instance:
             'region': region,
             'databaseVersion': database_version,
             'rootPassword': root_password,
-            'settings': {
-                'tier': machine_type or 'db-perf-optimized-N-2',
-                'userLabels': labels,
-                'storageSize': storage_size or '15GB',
-                'storageType': storage_type or 'SSD',
-                'ipConfiguration': {
-                    'ipv4Enabled': True,
-                },
-            },
+            'settings': settings,
         }
         try:
             op = (
@@ -162,6 +185,17 @@ class Instance:
             raise
 
     @classmethod
+    def _cleanup(cls, name: str) -> None:
+        """Best-effort delete of a possibly half-created instance, with its replicas and load balancer."""
+        try:
+            cls(name).delete()
+        except NotFound:
+            pass
+        except Exception:
+            with contextlib.suppress(Exception):
+                cls._delete(name)  # a half-created instance may not construct fully
+
+    @classmethod
     def _get(cls, instance_name: str) -> dict:
         client = get_client()
         req = client.instances().get(project=get_project_id(), instance=instance_name)
@@ -183,6 +217,7 @@ class Instance:
         # subnet_uri: str | None = None,
         postgres_version: str = '17',
         num_read_replicas: int = 0,
+        load_balancer: bool = None,
         load_balancer_machine_type: str | None = None,
         **kwargs,
     ) -> Instance:
@@ -190,40 +225,46 @@ class Instance:
         `name` is the name of the "master instance". This needs to be unique in the project.
         If `num_read_replicas > 0`, names of the replicas are constructed based on this `name`.
         """
-        dbversion = f'POSTGRES_{postgres_version}'
-        master_instance_name = cls._create(
-            name,
-            database_version=dbversion,
-            region=region,
-            root_password=root_password,
-            **kwargs,
-        )
-
-        if num_read_replicas:
-            master = cls(master_instance_name)
-            t0 = time.perf_counter()
-            while (state := master.state()) != 'RUNNABLE':
-                if time.perf_counter() - t0 > 600:
-                    raise concurrent.futures.TimeoutError(
-                        f"timed out waiting for instance '{master_instance_name}' to be RUNNABLE"
-                    )
-                print('waiting for master instance; current state:', state)
-                time.sleep(5)
-
-            for idx in range(num_read_replicas):
-                cls._create(
-                    f'{name}-replica-{idx + 1}',
-                    master_instance_name=master_instance_name,
-                    database_version=dbversion,
-                    region=region,
-                    **kwargs,
-                )
-            attach_load_balancer(
-                master_instance_name,
-                postgres_version=postgres_version,
-                zone=f'{region}-a',
-                machine_type=load_balancer_machine_type,
+        kwargs.setdefault('backups', num_read_replicas > 0)
+        try:
+            dbversion = f'POSTGRES_{postgres_version}'
+            master_instance_name = cls._create(
+                name,
+                database_version=dbversion,
+                region=region,
+                root_password=root_password,
+                **kwargs,
             )
+
+            if num_read_replicas:
+                master = cls(master_instance_name)
+                t0 = time.perf_counter()
+                while (state := master.state()) != 'RUNNABLE':
+                    if time.perf_counter() - t0 > 600:
+                        raise concurrent.futures.TimeoutError(
+                            f"timed out waiting for instance '{master_instance_name}' to be RUNNABLE"
+                        )
+                    print('waiting for master instance; current state:', state)
+                    time.sleep(5)
+
+                for idx in range(num_read_replicas):
+                    cls._create(
+                        f'{name}-replica-{idx + 1}',
+                        master_instance_name=master_instance_name,
+                        database_version=dbversion,
+                        region=region,
+                        **kwargs,
+                    )
+                if load_balancer:
+                    attach_load_balancer(
+                        master_instance_name,
+                        postgres_version=postgres_version,
+                        zone=f'{region}-a',
+                        machine_type=load_balancer_machine_type,
+                    )
+        except BaseException:
+            cls._cleanup(name)
+            raise
 
         return cls(master_instance_name)
 
@@ -271,9 +312,7 @@ class Instance:
             try:
                 delete_load_balancer(self.name, f'{self.region}-a')
             except NotFound:
-                warnings.warn(
-                    f'load balancer for {self.name} was not found; ignored for now; please investigate!'
-                )
+                pass
             for name in replicas:
                 self._delete(name, wait=False)
             t0 = time.perf_counter()
